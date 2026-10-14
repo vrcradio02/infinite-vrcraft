@@ -8,7 +8,7 @@ export const GAME = {
   /** Nom provisoire — modifiable librement. */
   nom: 'Infinite Craft Ultimate',
   slug: 'infinite-vrcraft',
-  version: '1.0.1',
+  version: '1.1.0',
   depot: 'https://github.com/vrcradio02/infinite-vrcraft',
 };
 
@@ -52,10 +52,29 @@ export const TITRES = [
   { niveau: 75, titre: "Gardien de l'infini" },
 ];
 
-/** Système d'aides partagé : 5 aides par fenêtre de 10 minutes (tous familiers confondus). */
+/**
+ * Système d'aides partagé : 5 aides par fenêtre de 10 minutes (tous familiers confondus).
+ * `bonusMax` : une potion donnée alors que le quota est DÉJÀ plein le pousse jusqu'à
+ * `max + bonusMax` (affiché « 10 / 5 »). La recharge de 10 minutes ramène ensuite à `max`.
+ */
 export const QUOTA = {
   max: 5,
+  bonusMax: 5,
   fenetreMs: 10 * 60 * 1000,
+};
+
+/**
+ * Potions de familier : elles font monter un animal d'un niveau exactement et
+ * rechargent le quota d'aides.
+ *  - `depart`   : potions offertes au début d'une partie ;
+ *  - `parNiveau`: potions gagnées à chaque niveau du joueur ;
+ *  - `parQuete` : potions gagnées à chaque quête dont la récompense est réclamée.
+ */
+export const POTIONS = {
+  depart: 1,
+  parNiveau: 1,
+  parQuete: 1,
+  max: 999,
 };
 
 /** Équipe active de familiers. */

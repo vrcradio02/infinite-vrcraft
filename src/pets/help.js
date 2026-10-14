@@ -51,8 +51,10 @@ export class QuotaAides {
     const valides = candidats.filter((c) => Number.isFinite(c?.restant) && Number.isFinite(c?.debutFenetre));
     if (valides.length) {
       // On retient l'état qui donne le MOINS d'aides (le plus restrictif).
+      // La borne haute inclut le bonus de potion (jusqu'à max + bonusMax) : sans cela,
+      // un « 10 / 5 » obtenu par potion retomberait à 5 après un rechargement de page.
       valides.sort((x, y) => x.restant - y.restant || y.debutFenetre - x.debutFenetre);
-      this.restant = Math.max(0, Math.min(QUOTA.max, valides[0].restant));
+      this.restant = Math.max(0, Math.min(QUOTA.max + QUOTA.bonusMax, valides[0].restant));
       this.debutFenetre = valides[0].debutFenetre;
     }
     this._appliquerRecharge(now);
@@ -81,7 +83,23 @@ export class QuotaAides {
     }
   }
 
-  /** Millisecondes avant la prochaine recharge (0 si déjà plein). */
+  /**
+   * Recharge complète du quota par une potion.
+   *  - quota entamé (0/5 à 4/5)  -> retour à 5/5 (le maximum) ;
+   *  - quota déjà plein (5/5)    -> bonus : 10/5 (max + bonusMax).
+   * La fenêtre de 10 minutes reste inchangée : à la prochaine recharge, le compteur
+   * revient simplement à 5/5.
+   * @returns {{restant:number, bonus:boolean}}
+   */
+  rechargerComplet() {
+    this._appliquerRecharge();
+    const bonus = this.restant >= QUOTA.max;
+    this.restant = bonus ? QUOTA.max + QUOTA.bonusMax : QUOTA.max;
+    this.persister();
+    return { restant: this.restant, bonus };
+  }
+
+  /** Millisecondes avant la prochaine recharge (0 si le quota est plein ou en bonus). */
   tempsRestant() {
     this._appliquerRecharge();
     if (this.restant >= QUOTA.max) return 0;

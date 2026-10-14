@@ -11,7 +11,9 @@
  *  - les ingrédients inconnus ou les résultats vides sont rejetés,
  *  - la catégorie et la rareté d'une recette proviennent TOUJOURS de l'élément résultat
  *    (cohérence garantie, pas de recopie manuelle),
- *  - chaque recette reçoit un identifiant stable dérivé de la paire.
+ *  - chaque recette reçoit un identifiant stable dérivé de la paire,
+ *  - la compilation est DÉTERMINISTE : relancer `npm run build` sans changer les
+ *    données ne produit aucun diff, ce qui permet de versionner le registre.
  */
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -136,7 +138,9 @@ async function main() {
     meta: {
       version: 1,
       jeu: 'infinite-vrcraft',
-      genereLe: new Date().toISOString(),
+      // Aucun horodatage : la compilation doit être DÉTERMINISTE, afin que
+      // relancer `npm run build` sans changer les données ne produise aucun diff.
+      generePar: 'tools/build-registry.mjs',
       ordreImportantParDefaut: ORDRE_IMPORTANT,
       format: 'elements: [nom, categorie, rarete, monde, emoji, description] ; recipes/candidates: [id, a, b, resultat, lot]',
       note: 'Registre officiel versionné. Les découvertes des joueurs restent locales ; toute mise à jour du registre passe par une nouvelle version du projet ou un serveur autorisé.',
@@ -153,7 +157,10 @@ async function main() {
     candidates: recipes.filter((r) => r.source !== 'officiel').map(versCompact),
   };
 
-  await writeFile(join(DATA, 'registre-fusions.json'), JSON.stringify(sortie, null, 2) + '\n', 'utf8');
+  // Sortie minifiée : le registre est un ARTEFACT généré, destiné au navigateur.
+  // Minifié, il est environ deux fois plus léger à télécharger ; le format compact
+  // reste documenté dans src/fusion/registry-format.js.
+  await writeFile(join(DATA, 'registre-fusions.json'), JSON.stringify(sortie) + '\n', 'utf8');
   await writeFile(join(ROOT, 'tools', 'rapport-registre.json'), JSON.stringify(rapport, null, 2) + '\n', 'utf8');
 
   console.log('Registre compilé :', JSON.stringify(rapport.stats));

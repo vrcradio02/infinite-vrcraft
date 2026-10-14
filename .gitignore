@@ -8,9 +8,8 @@ Thumbs.db
 !.env.example
 
 # Artefacts de build et rapports d'outils (recompilables à volonté)
-# Le registre compilé est produit par `npm run build` ; le jeu sait aussi charger
-# directement les sources versionnées (data/elements.json + data/fusions/lot-*.json).
-data/registre-fusions.json
+# NOTE : data/registre-fusions.json est VERSIONNÉ (registre officiel), et il est
+# régénéré à l'identique par `npm run build` (compilation déterministe).
 data/elements-genere.json
 data/fusions/lot-genere.json
 tools/rapport-registre.json

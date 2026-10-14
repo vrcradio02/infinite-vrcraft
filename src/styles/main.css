@@ -134,6 +134,8 @@ code, .mono { font-family: var(--mono); }
 .boot-title { font-size: 1.6rem; }
 .boot-bar { width: min(320px, 70vw); height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
 .boot-bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width 200ms ease; }
+.boot-version { font-size: .8rem; }
+.boot-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
 
 /* ---------------- Layout ---------------- */
 .app {

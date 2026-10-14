@@ -1,7 +1,7 @@
 {
   "name": "infinite-vrcraft",
-  "version": "1.1.0",
-  "description": "Infinite Craft Ultimate — jeu de fusion d'elements jouable dans le navigateur, sans compte, avec 3 sauvegardes, quetes, mondes et familiers.",
+  "version": "1.3.0",
+  "description": "Infinite Craft Ultimate — jeu de fusion d'elements jouable dans le navigateur, sans compte, avec 3 sauvegardes, quetes, mondes, familiers et amis.",
   "type": "module",
   "private": false,
   "license": "MIT",

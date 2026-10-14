@@ -7,13 +7,15 @@
  *  - toute donnée malformée ou suspecte est refusée avec un message clair,
  *  - la validation est pure (aucun accès DOM, aucun effet de bord) => testable.
  */
-import { SAVE_FORMAT_VERSION, IMPORT_MAX_BYTES, NB_SAUVEGARDES } from '../config.js';
+import { SAVE_FORMAT_VERSION, IMPORT_MAX_BYTES, NB_SAUVEGARDES, POTIONS } from '../config.js';
 
 /** Bornes de sécurité pour éviter les fichiers abusifs. */
 export const LIMITES = {
   maxDecouvertes: 200000,
   maxHistorique: 100000,
   maxExperimental: 200000,
+  maxCreations: 50000,
+  maxPotions: POTIONS.max,
   maxTailleNom: 40,
   maxTailleTexte: 500,
 };
@@ -95,12 +97,13 @@ export function validerSauvegarde(data) {
   const nbDecouvertes = data.decouvertes ? Object.keys(data.decouvertes).length : 0;
   const nbHistorique = data.historique ? data.historique.length : 0;
   const nbExperimental = data.experimental ? Object.keys(data.experimental).length : 0;
+  const nbCreations = data.creations ? Object.keys(data.creations).length : 0;
 
-  if (nbDecouvertes > LIMITES.maxDecouvertes || nbHistorique > LIMITES.maxHistorique || nbExperimental > LIMITES.maxExperimental) {
+  if (nbDecouvertes > LIMITES.maxDecouvertes || nbHistorique > LIMITES.maxHistorique || nbExperimental > LIMITES.maxExperimental || nbCreations > LIMITES.maxCreations) {
     return {
       ok: false,
       erreur: ERREURS.LIMITES_DEPASSEES,
-      details: `decouvertes=${nbDecouvertes}, historique=${nbHistorique}, experimental=${nbExperimental}.`,
+      details: `decouvertes=${nbDecouvertes}, historique=${nbHistorique}, experimental=${nbExperimental}, creations=${nbCreations}.`,
     };
   }
 
@@ -120,7 +123,7 @@ export function validerTexteSauvegarde(texte) {
   } catch (e) {
     return { ok: false, erreur: ERREURS.JSON_INVALIDE, details: String(e.message || e) };
   }
-  return validerSauvegarde(depaqueter(data));
+  return validerSauvegarde(depaquetter(data));
 }
 
 /**
@@ -154,6 +157,13 @@ export function normaliserSauvegarde(data) {
   d.decouvertes = obj(data.decouvertes);
   d.historique = Array.isArray(data.historique) ? data.historique.slice(0, LIMITES.maxHistorique) : [];
   d.experimental = obj(data.experimental);
+  // Créations du joueur : conservées telles quelles (elles sont revalidées à l'injection
+  // dans le catalogue) et bornées par LIMITES.maxCreations.
+  d.creations = obj(data.creations);
+  // Potions de familier : entier borné (les anciennes sauvegardes en reçoivent d'office).
+  d.potions = Number.isFinite(data.potions)
+    ? Math.max(0, Math.min(LIMITES.maxPotions, Math.floor(data.potions)))
+    : POTIONS.depart;
   d.succes = obj(data.succes);
   d.mondes = obj(data.mondes);
   d.collections = obj(data.collections);

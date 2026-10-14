@@ -7,7 +7,7 @@
  * - copie de secours automatique avant toute opération destructrice,
  * - restauration possible depuis la copie de secours.
  */
-import { GAME, SAVE_FORMAT_VERSION, NB_SAUVEGARDES, ELEMENTS_DE_DEPART } from '../config.js';
+import { GAME, SAVE_FORMAT_VERSION, NB_SAUVEGARDES, ELEMENTS_DE_DEPART, POTIONS } from '../config.js';
 import { storage } from './storage.js';
 import { validerSauvegarde, validerTexteSauvegarde, normaliserSauvegarde, slotValide } from './validate.js';
 
@@ -40,6 +40,11 @@ export function nouvelleSauvegarde(nom = 'Joueur', avatar = '🧪') {
     decouvertes,
     historique: [],
     experimental: {},
+    // Créations du joueur (mode Créativité) : elles comptent comme des éléments
+    // officiels et sont rechargées dans le catalogue à l'ouverture de la partie.
+    creations: {},
+    // Potions de familier : +1 niveau et recharge du quota d'aides.
+    potions: POTIONS.depart,
     succes: {},
     mondes: { libre: true, nature: true },
     collections: {},

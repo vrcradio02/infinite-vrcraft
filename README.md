@@ -200,6 +200,9 @@ Notes importantes :
 - Le fichier `.nojekyll` est présent : il empêche Jekyll d'ignorer certains fichiers.
 - Tous les chemins sont **relatifs** (`./`), ce qui fonctionne dans un sous-dossier de projet.
 - Le service worker exige **HTTPS** : GitHub Pages le fournit automatiquement.
+- **À chaque publication qui modifie la coquille** (HTML, CSS, JS) : incrémentez `VERSION` dans
+  `sw.js` **et** `GAME.version` dans `src/config.js`. Sans cela, les visiteurs déjà venus peuvent
+  rester bloqués sur l'ancienne version mise en cache par le service worker.
 - `data/registre-fusions.json` est **versionné** (registre officiel compilé, minifié pour le
   téléchargement). Après une modification des recettes : `npm run build`, puis committez le fichier.
   La compilation est déterministe. Si le fichier est absent, le jeu charge directement les sources
@@ -310,13 +313,14 @@ officielles : la promotion en officiel reste une décision humaine (relisez, pui
 - [x] Sons facultatifs générés localement + réglage du volume
 - [x] Navigation clavier, libellés ARIA, indicateurs non fondés sur la seule couleur
 - [x] Responsive ordinateur / tablette / téléphone (panneau latéral repliable)
-- [x] Mode hors ligne via service worker
+- [x] Mode hors ligne via service worker, avec mises à jour fiables (cache versionné)
+- [x] Écran de chargement avec actions de secours (jamais de blocage définitif)
 - [x] Internationalisation prête (français par défaut, anglais inclus)
 - [x] Statistiques complètes, partage de découverte (copie dans le presse-papiers)
 - [x] Classements **locaux** entre les 3 emplacements (aucun faux classement en ligne)
 - [x] Registre officiel **versionné** (42 Ko), compilation déterministe
 - [x] Outils : compilateur, validateur, générateur de lots, vérificateur d'imports, test de fumée
-- [x] **93 tests automatisés** (unitaires + intégration du vrai contrôleur)
+- [x] **115 tests automatisés** (unitaires + intégration du vrai contrôleur)
 
 ## 9. Fonctionnalités restant à faire
 
@@ -392,10 +396,10 @@ npm test
 ```
 
 ```
-ℹ tests 93
-ℹ pass 93
+ℹ tests 115
+ℹ pass 115
 ℹ fail 0
-ℹ duration_ms ~1570
+ℹ duration_ms ~1700
 ```
 
 Couverture fonctionnelle réelle (extrait) :
@@ -409,6 +413,8 @@ Couverture fonctionnelle réelle (extrait) :
 | Quêtes | déterminisme du tirage quotidien/hebdomadaire, progression par type, succès, mondes, collections |
 | IA | proposition conforme acceptée, ingrédients incohérents refusés, résultat vide refusé |
 | Intégration | vrai contrôleur : création de partie, fusion, chaîne Vapeur→Nuage, XP, aides, quota, export/import, 3 emplacements indépendants, **repli sans registre compilé** |
+| Interface (habillage) | règle globale `[hidden]`, masquage de l'écran de chargement, rendu de chaque écran au changement d'onglet, liste déroulante recevant un élément (pas un sélecteur), emoji présents dans la navigation, les titres, les filtres et les écrans |
+| Mise à jour du site | service worker à cache **versionné**, navigations servies « réseau d'abord », purge des anciens caches, coquille pré-cachée ne référençant que des fichiers existants, actions de secours de l'écran de chargement, rechargement unique (sans boucle) après une mise à jour |
 
 Vérifications complémentaires :
 
@@ -420,13 +426,35 @@ npm run check
 Modules importés avec succès : 26/26
 HTML et JavaScript sont cohérents.
 Bootstrap navigateur exécuté sans erreur (DOM simulé).
+Écrans rendus : 10 vérifiés non vides.
 Registre valide.
 ```
 
-### Tests manuels (à faire dans un vrai navigateur)
+### Vérifications dans un vrai navigateur (Chrome headless)
 
-Ces vérifications ne peuvent pas être automatisées ici (aucun navigateur dans l'environnement de
-développement). **Elles restent à valider** :
+Ces points ont été contrôlés automatiquement dans **Chrome 155 headless**, piloté par le protocole
+DevTools (36 vérifications, toutes OK) :
+
+- cause du blocage du chargement reproduite (`display: grid` sur `.boot` annulait l'attribut `hidden`),
+  puis corrigée (`getComputedStyle(#boot).display === 'none'`, `#boot` ne couvre plus l'écran,
+  le clic au centre atteint le contenu) ;
+- création d'une partie depuis l'interface, sélection accessible de deux éléments, fusion
+  **Eau + Feu = Vapeur** (4 → 5 découvertes) et affichage de l'élément sur le plateau ;
+- les 10 écrans se rendent réellement (contenu non vide) et affichent des emoji ;
+- aucune erreur console.
+
+### Parcours « visiteur bloqué » vérifié de bout en bout
+
+Le scénario exact signalé par les joueurs a été reproduit puis validé (12 vérifications, toutes OK) :
+
+1. le navigateur charge **l'ancienne version publiée** : son service worker met la coquille en
+   cache (`icu-v1`) et l'écran “ Chargement du catalogue… ” reste affiché, le jeu est inaccessible ;
+2. le site est corrigé et republié (mêmes adresses, fichiers différents) et la page est rechargée :
+   le service worker détecte le nouveau `sw.js`, installe le cache `icu-v3` et supprime `icu-v1` ;
+3. au plus tard au **deuxième rechargement**, la nouvelle version s'affiche (vérifiée : version
+   `1.0.1`, `#boot` masqué, catalogue chargé, 12 boutons et 13 titres avec emoji, jeu jouable).
+
+### Tests manuels (restent à faire sur un vrai appareil)
 
 - [ ] glisser-déposer à la souris et au doigt, y compris sur petit écran ;
 - [ ] zoom / panoramique au trackpad et au pincement ;
@@ -435,15 +463,30 @@ développement). **Elles restent à valider** :
 - [ ] connexion très lente (3G simulée) ;
 - [ ] couleur/contraste avec le thème « contraste » ;
 - [ ] installation de l'application (PWA) sur mobile ;
-- [ ] comportement en navigation privée (repli localStorage, absence d'IndexedDB).
+- [ ] comportement en navigation privée (repli localStorage, absence d'IndexedDB) ;
+- [ ] rendu des emoji : le conteneur de vérification n'a **aucune police emoji**, la lisibilité
+      graphique des pictogrammes doit être confirmée sur un appareil réel.
 
 ---
 
-## 12. Limites connues
+## 12. Corrections apportées après la première mise en ligne
+
+| Symptôme | Cause | Correction |
+|---|---|---|
+| L'écran « Chargement du catalogue… » ne disparaissait jamais : impossible de jouer | `.boot` et `.app` déclarent `display: grid` ; une règle d'auteur l'emporte sur le `display: none` que le navigateur applique à `[hidden]`, donc l'écran de chargement restait affiché par-dessus le jeu | règle globale `[hidden] { display: none !important; }` + masquage explicite (`hidden` **et** `display: none`) dans `afficherApplication()` |
+| **Le blocage continuait pour certains joueurs, même après correction et republication** | Le service worker servait **toute** la coquille « cache d'abord » avec un nom de cache figé (`icu-v1`) : `index.html` et `src/main.js` bogués étaient resservis indéfiniment depuis le cache du navigateur, et comme `sw.js` lui-même n'avait pas changé, aucune mise à jour n'était détectée | `sw.js` réécrit : cache **versionné** (`icu-${VERSION}`, purge des anciens caches à l'activation), **réseau d'abord** pour les navigations et documents HTML, « cache puis rafraîchissement » pour les ressources, pré-cache fichier par fichier ; `main.js` recharge une seule fois la page quand une nouvelle version prend la main (`controllerchange`) |
+| Attente sans fin si le chargement échoue ou traîne | `demarrer()` affichait un message d'erreur mais laissait l'écran de chargement, sans aucun moyen d'agir | surveillance du chargement (20 s) + boutons **🔄 Recharger** et **🧹 Vider le cache et recharger** (désinscription du service worker + purge des caches) affichés en cas d'échec, et numéro de version visible (`v1.0.1`) sur l'écran de chargement comme dans les crédits |
+| Onglets Inventaire / Encyclopédie vides, voire plantage | `_remplirSelect()` recevait l'élément **et** le passait à `querySelector`, ce qui lève `is not a valid selector` dans un vrai navigateur (invisible sous le DOM simulé) | la fonction reçoit désormais directement l'élément ; le DOM simulé refuse maintenant un sélecteur non textuel |
+| Aucun écran ne s'affichait après navigation | `vues.rendre(nom)` n'était jamais appelé : seul `majTopbar()` l'était | `onEcran()` appelle `vues.rendre(nom)` sur chaque changement d'écran |
+| Interface austère | — | emoji ajoutés dans la navigation, les titres, les boutons, les filtres, les listes déroulantes, les cartes, les toasts et les modales |
+
+---
+
+## 13. Limites connues
 
 | Limite | Détail |
 |---|---|
-| **Mode hors ligne** | Nécessite une première visite en HTTPS pour installer le service worker. Les données JSON sont mises en cache au fur et à mesure ; une mise à jour du registre n'est visible qu'après un chargement en ligne. |
+| **Mode hors ligne** | Nécessite une première visite en HTTPS pour installer le service worker. Les navigations et les données JSON sont servies « réseau d'abord » (mise à jour immédiate), les ressources sont affichées immédiatement puis rafraîchies en arrière-plan. **Publier une modification** de la coquille impose d'incrémenter `VERSION` dans `sw.js` : c'est ce qui purge l'ancien cache chez les visiteurs. Après une publication, un visiteur déjà venu peut avoir besoin de **deux rechargements** (le premier installe la nouvelle version, le second l'affiche). |
 | **Stockage local** | Les données vivent dans le navigateur (IndexedDB, repli `localStorage`). Vider le cache ou les données du site **efface** les parties. Utilisez l'**export JSON** comme sauvegarde durable. Aucune récupération par e-mail n'existe : sans compte, il n'y a rien à récupérer côté serveur. |
 | **Quota d'aides** | En mode purement local, un utilisateur expérimenté peut modifier le compteur dans le stockage du navigateur. Une limitation inviolable exigerait un serveur (voir `server/`). |
 | **Recettes générées** | Les lots « candidats » ne sont pas des recettes officielles : ils ne comptent pas dans le compteur officiel et ne sont jamais présentés comme tels. |
@@ -453,11 +496,11 @@ développement). **Elles restent à valider** :
 
 ---
 
-## 13. Signaler un problème
+## 14. Signaler un problème
 
 Ouvrez une *issue* sur <https://github.com/vrcradio02/infinite-vrcraft/issues> en précisant
 le navigateur, l'appareil, et les étapes qui reproduisent le problème.
 
-## 14. Licence
+## 15. Licence
 
 MIT — voir [LICENSE](LICENSE).

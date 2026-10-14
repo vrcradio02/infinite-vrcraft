@@ -18,6 +18,28 @@ let vues = null;
 
 const ECRANS = ['accueil', 'jeu', 'inventaire', 'encyclopedie', 'quetes', 'mondes', 'familiers', 'historique', 'sauvegardes', 'parametres', 'profil', 'credits'];
 
+/* -------------------- Écran de chargement -------------------- */
+
+/**
+ * Passe de l'écran de chargement à l'application.
+ *
+ * On ne se contente pas de l'attribut `hidden` : sa règle par défaut peut être écrasée
+ * par une classe CSS qui déclare `display` (l'écran de chargement restait alors affiché
+ * pour toujours et le jeu était inaccessible). Le style en ligne garantit la bascule.
+ */
+function afficherApplication() {
+  const boot = $('#boot');
+  if (boot) {
+    boot.hidden = true;
+    boot.style.display = 'none';
+  }
+  const app = $('#app');
+  if (app) {
+    app.hidden = false;
+    app.style.display = '';
+  }
+}
+
 async function demarrer() {
   enregistrerEcrans(ECRANS);
   try {
@@ -26,7 +48,9 @@ async function demarrer() {
       $('#boot-bar-fill').style.width = `${Math.round(ratio * 100)}%`;
     });
   } catch (e) {
-    $('.boot-sub').textContent = `Erreur au chargement : ${e.message}`;
+    const sub = $('.boot-sub');
+    sub.textContent = `⚠️ Erreur au chargement : ${e.message}`;
+    sub.classList.add('error');
     console.error(e);
     return;
   }
@@ -53,12 +77,12 @@ async function demarrer() {
   appliquerTraductions();
   setLangue('fr');
 
-  $('#boot').hidden = true;
-  $('#app').hidden = false;
+  afficherApplication();
   allerA('accueil');
 
+  // Chaque changement d'écran doit RENDRE son contenu (sinon l'écran restait vide).
   onEcran((nom) => {
-    if (nom === 'jeu') plateau.rendre();
+    vues.rendre(nom);
     vues.majTopbar();
   });
 
@@ -68,7 +92,7 @@ async function demarrer() {
   if (dernier !== null && dernier !== undefined && resume.slots[dernier]?.existe) {
     await jeu.charger(dernier);
     appliquerPreferences();
-    toast(`Partie « ${jeu.save.nom} » reprise automatiquement.`, 'info');
+    toast(`▶️ Partie « ${jeu.save.nom} » reprise automatiquement.`, 'info');
     allerA('jeu');
   }
 
@@ -82,22 +106,22 @@ async function traiterActionAccueil(action) {
     case 'jouer': {
       if (!jeu.save) {
         const slot = await premierEmplacementLibre();
-        if (slot === null) { toast('Les trois emplacements sont occupés. Choisissez une sauvegarde.', 'warn'); allerA('sauvegardes'); return; }
+        if (slot === null) { toast('⚠️ Les trois emplacements sont occupés. Choisissez une sauvegarde.', 'warn'); allerA('sauvegardes'); return; }
         const rep = await demanderNom();
         if (rep === null) return;
         await jeu.creer(slot, rep.nom, rep.avatar);
         appliquerPreferences();
-        toast('Nouvelle partie : Feu, Eau, Terre et Vent vous attendent.', 'good');
+        toast('✨ Nouvelle partie : Feu, Eau, Terre et Vent vous attendent.', 'good');
       }
       return allerA('jeu');
     }
     case 'continuer': {
       const resume = await jeu.resume();
       const slot = resume.dernier ?? resume.slots.find((s) => s.existe)?.slot;
-      if (slot === null || slot === undefined || !resume.slots[slot]?.existe) { toast('Aucune partie à continuer.', 'warn'); return allerA('sauvegardes'); }
+      if (slot === null || slot === undefined || !resume.slots[slot]?.existe) { toast('💤 Aucune partie à continuer.', 'warn'); return allerA('sauvegardes'); }
       await jeu.charger(slot);
       appliquerPreferences();
-      toast(`Partie « ${jeu.save.nom} » chargée.`, 'good');
+      toast(`▶️ Partie « ${jeu.save.nom} » chargée.`, 'good');
       return allerA('jeu');
     }
     case 'nouvelle': return allerA('sauvegardes');
@@ -122,7 +146,7 @@ function demanderNom() {
     const input = el('input', { class: 'input', value: 'Joueur', maxlength: 40, type: 'text' });
     const sel = el('select', { class: 'input' }, ['🧪', '🔥', '💧', '🌍', '💨', '🐉', '🌸', '⭐'].map((e) => el('option', { value: e, text: e })));
     ouvrirModale({
-      titre: 'Nouvelle partie',
+      titre: '✨ Nouvelle partie',
       contenu: el('div', {}, [
         el('p', { text: 'Choisissez un pseudonyme et un avatar. Aucun e-mail ni numéro de téléphone n\'est demandé.' }),
         el('div', { class: 'row' }, [input, sel]),
@@ -140,7 +164,7 @@ function demanderNom() {
 /* -------------------- Fusion -------------------- */
 
 async function fusionner(a, b) {
-  if (!jeu.save) { toast('Créez ou chargez une partie d\'abord.', 'warn'); allerA('sauvegardes'); return; }
+  if (!jeu.save) { toast('📂 Créez ou chargez une partie d\'abord.', 'warn'); allerA('sauvegardes'); return; }
   const r = await jeu.fusionner(a, b);
   if (!r.ok) {
     if (r.statut === STATUT.INCONNU) {
@@ -150,7 +174,7 @@ async function fusionner(a, b) {
         el('p', { class: 'muted', text: 'Vous pouvez tester le mode Créativité (proposition expérimentale locale ou service IA facultatif).' }),
       ]);
       ouvrirModale({
-        titre: 'Pas de recette connue',
+        titre: '🚫 Pas de recette connue',
         contenu,
         actions: [
           { label: 'Fermer' },
@@ -182,7 +206,7 @@ function afficherResultat(resultat, statut) {
       : el('p', { class: 'good', text: 'Nouvelle découverte enregistrée !' }),
   ]);
   ouvrirModale({
-    titre: statut === 'experimental' ? 'Création expérimentale' : 'Nouvelle découverte !',
+    titre: statut === 'experimental' ? '🧬 Création expérimentale' : '🎉 Nouvelle découverte !',
     contenu,
     actions: [
       { label: 'Fermer' },
@@ -195,9 +219,9 @@ async function partagerResultat(resultat) {
   const texte = `${resultat.emoji || '✨'} ${resultat.nom} (${resultat.rarete}) — découvert dans Infinite Craft Ultimate`;
   try {
     await navigator.clipboard.writeText(texte);
-    toast('Découverte copiée dans le presse-papiers.', 'good');
+    toast('📋 Découverte copiée dans le presse-papiers.', 'good');
   } catch {
-    ouvrirModale({ titre: 'Partager la découverte', contenu: el('pre', { class: 'code-preview', text: texte }) });
+    ouvrirModale({ titre: '📤 Partager la découverte', contenu: el('pre', { class: 'code-preview', text: texte }) });
   }
 }
 
@@ -218,7 +242,7 @@ function abonnerEvenements() {
   on(EV.NIVEAU, ({ niveau, titre, recompenses }) => {
     jouer('niveau', jeu.save?.parametres);
     ouvrirModale({
-      titre: `Niveau ${niveau} atteint !`,
+      titre: `🎉 Niveau ${niveau} atteint !`,
       contenu: el('div', {}, [
         el('p', { text: `Nouveau titre : ${titre}` }),
         el('ul', {}, (recompenses || []).map((r) => el('li', { text: r.nom || `${r.montant} ${r.type}` }))),
@@ -271,4 +295,4 @@ function installerServiceWorker() {
 demarrer();
 
 // Exposé pour le débogage en console (sans donner accès à des secrets, il n'y en a aucun).
-window.__icu = { jeu };
+window.__icu = { jeu, allerA, afficherApplication, plateau: () => plateau, vues: () => vues };

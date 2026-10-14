@@ -87,6 +87,14 @@ html[data-theme="contraste"] {
 
 * { box-sizing: border-box; }
 
+/*
+ * L'attribut `hidden` doit TOUJOURS l'emporter.
+ * Sans cette règle, une classe qui déclare `display` (.boot, .app, .row, .action-card…)
+ * écrase le `display: none` que le navigateur applique à `[hidden]` : c'était la cause
+ * de l'écran de chargement qui ne disparaissait jamais et bloquait totalement le jeu.
+ */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -167,7 +175,7 @@ html[data-theme="contraste"] .nav-btn[aria-current="true"] { color: #000; }
 
 .content { grid-area: main; overflow: auto; padding: 16px; }
 .screen { max-width: 1200px; margin: 0 auto; }
-.screen[hidden] { display: none; }
+/* `.screen[hidden]` est couvert par la règle globale [hidden] { display: none !important }. */
 
 /* ---------------- Composants ---------------- */
 .card {

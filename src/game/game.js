@@ -11,11 +11,11 @@ import { GestionnaireSauvegardes } from '../saves/saves.js';
 import { progression, titrePourNiveau, xpPourRarete, recompenseNiveau, xpPourFusionConnue } from './progression.js';
 import { evaluerSucces } from '../quests/achievements.js';
 import { tirerQuetes, cleJour, cleSemaine, avancerQuete } from '../quests/quests.js';
-import { chargerFamiliers, nouveauFamilier, gagnerXpFamilier, indexerFamiliers } from '../pets/pets.js';
+import { chargerFamiliers, nouveauFamilier, gagnerXpFamilier, niveauFamilier, indexerFamiliers } from '../pets/pets.js';
 import { QuotaAides, executerAide } from '../pets/help.js';
 import { chargerMondes, etatMondes, mondeDebloque } from './mondes.js';
 import { chargerCollections, marquerCollections, collectionsNouvelles } from './collections.js';
-import { EQUIPE_MAX } from '../config.js';
+import { EQUIPE_MAX, QUOTA, POTIONS, RARETES } from '../config.js';
 import { emit, EV } from '../core/events.js';
 import { obtenirAideIA, iaDisponible, chargerConfigIA, enregistrerConfigIA } from '../ai/ai.js';
 
@@ -35,6 +35,14 @@ const DEBLOCAGE_FAMILIERS = [
 
 function countDecouvertes(s) {
   return Object.keys(s.decouvertes || {}).length;
+}
+
+/**
+ * Clé canonique d'une création : A + B et B + A désignent la même paire, donc la même
+ * création (même élément reproductible).
+ */
+export function cleCreation(a, b) {
+  return a <= b ? `${a}|${b}` : `${b}|${a}`;
 }
 
 export class Jeu {
@@ -127,7 +135,12 @@ export class Jeu {
 
     // Quota d'aides : restauration (sauvegarde + miroir local, le plus restrictif gagne).
     this.quota = new QuotaAides(slot).restaurer(data.aideQuota);
+    this.save.potions = Number.isFinite(this.save.potions) ? this.save.potions : POTIONS.depart;
 
+    // Créations du joueur : rechargées dans le catalogue AVANT le reste, car elles
+    // comptent comme des éléments officiels (découvertes, mondes, collections, succès).
+    this.save.creations = this.save.creations || {};
+    this._restaurerCreations();
     // Série de connexion (facultative, sans punition).
     this._majSerie();
 
@@ -166,6 +179,7 @@ export class Jeu {
       a, b,
       mode,
       dejaDecouvert: (id) => Boolean(this.save.decouvertes[id]),
+      creation: (x, y) => this.creationExistante(x, y),
     });
 
     this.save.stats.fusionsTentees++;
@@ -180,13 +194,11 @@ export class Jeu {
     const resultat = resolution.resultat;
 
     if (resolution.statut === STATUT.EXPERIMENTAL) {
-      this.save.experimental[`${a}|${b}`] = { resultat: resultat.nom, id: resultat.id, date: new Date().toISOString() };
-      this.save.stats.experimentales = (this.save.stats.experimentales || 0) + 1;
-      this._historiser(a, b, resultat.nom, 'experimental', mode);
-      this.ajouterXp(3, { silencieux: true });
-      this._autosave();
-      emit(EV.FUSION, { statut: STATUT.EXPERIMENTAL, resultat });
-      return { ok: true, statut: STATUT.EXPERIMENTAL, resultat };
+      // Mode Créativité sans recette officielle : on ne DEMANDE rien au joueur.
+      // Le résultat est composé (service IA s'il est configuré, sinon composeur local
+      // déterministe) puis enregistré comme élément officiel de la partie.
+      const rep = await this._proposerCreation(a, b);
+      return this.enregistrerCreation(a, b, rep.resultat, rep.avertissement ? 'local' : rep.source, rep.avertissement);
     }
 
     // Recette officielle : nouveau ou déjà connu.
@@ -224,26 +236,165 @@ export class Jeu {
   }
 
   /**
-   * Demande une aide IA (mode Créativité) pour une paire inconnue.
-   * Retombe toujours sur le composeur local si le service est absent.
+   * Compose une création pour une paire sans recette officielle.
+   * Le composeur local est TOUJOURS disponible (aucun réseau requis) : si le service IA
+   * facultatif est configuré il est essayé d'abord, sinon on retombe silencieusement dessus.
+   * @returns {Promise<{source:string, resultat:object, avertissement?:string}>}
    */
-  async fusionIA(a, b) {
-    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+  async _proposerCreation(a, b) {
     const nomA = this.store.elements.get(a)?.nom ?? a;
     const nomB = this.store.elements.get(b)?.nom ?? b;
-    const rep = await obtenirAideIA({
+    return obtenirAideIA({
       a, b, nomA, nomB, mode: 'creativite', fetchImpl: this.fetch,
       composerLocal: () => this.engine.composerExperimental(a, b),
     });
-    if (!rep.resultat) return { ok: false, erreur: 'Aucune proposition disponible.' };
-    const resultat = rep.resultat;
-    this.save.experimental[`${a}|${b}`] = { resultat: resultat.nom, id: resultat.id, date: new Date().toISOString(), source: rep.source };
+  }
+
+  /** Création déjà enregistrée par le joueur pour cette paire, ou null. */
+  creationExistante(a, b) {
+    return this.save?.creations?.[cleCreation(a, b)] || null;
+  }
+
+  /**
+   * Enregistre une création du mode Créativité comme ÉLÉMENT OFFICIEL de la partie :
+   *  - l'élément entre dans le catalogue (donc utilisable comme ingrédient),
+   *  - la paire devient reproductible (même paire => même élément),
+   *  - il rejoint l'inventaire et l'encyclopédie comme première découverte,
+   *  - il est persisté dans la sauvegarde (export/import compris) et rechargé à l'ouverture.
+   * Aucune question n'est posée au joueur : la fusion reste fluide.
+   */
+  enregistrerCreation(a, b, resultat, source = 'local', avertissement = null) {
+    const meta = this._metaCreation(a, b, resultat);
+    if (!meta) return { ok: false, erreur: 'Création impossible : ingrédient inconnu.' };
+    const cle = cleCreation(a, b);
+
+    // 1. Catalogue de la partie : l'élément existe et sert d'ingrédient aux fusions suivantes.
+    this.store.ajouterElements({ [meta.id]: meta });
+    // 2. Recette du joueur : la paire devient reproductible (comme une recette officielle).
+    this.ajouterRecetteCreation(a, b, meta, cle);
+
+    // 3. Persistance : la création suit la sauvegarde.
+    this.save.creations[cle] = { ...meta, a, b, source, date: new Date().toISOString() };
+    // Compatibilité : l'ancien journal « expérimental » et le succès Expérimentateur suivent.
+    this.save.experimental[cle] = { resultat: meta.nom, id: meta.id, date: new Date().toISOString(), source };
     this.save.stats.experimentales = (this.save.stats.experimentales || 0) + 1;
-    this.save.stats.fusionsTentees++;
-    this._historiser(a, b, resultat.nom, 'experimental', rep.source === 'ia' ? 'ia' : 'experimental');
-    this.ajouterXp(3, { silencieux: true });
+
+    const dejaConnue = Boolean(this.save.decouvertes[meta.id]);
+    if (!dejaConnue) {
+      // Première découverte : même traitement qu'une recette officielle (XP, quêtes, succès).
+      this.save.decouvertes[meta.id] = {
+        id: meta.id, date: new Date().toISOString(), source: 'creation',
+        rarete: meta.rarete, categorie: meta.categorie, monde: meta.monde, premiere: true,
+      };
+      this.save.stats.decouvertes = countDecouvertes(this.save);
+      this.ajouterXp(xpPourRarete(meta.rarete), { silencieux: true });
+    } else {
+      this.ajouterXp(xpPourFusionConnue(), { silencieux: true });
+    }
+
+    this._historiser(a, b, meta.nom, dejaConnue ? 'connu' : 'creation', 'creativite');
+    this._evenementQuetes({ type: 'fusion', reussie: true });
+    if (!dejaConnue) {
+      this._evenementQuetes({ type: 'decouverte', elementId: meta.id, categorie: meta.categorie, rarete: meta.rarete, monde: meta.monde });
+      this._xpFamiliers(3);
+      this._majCollections();
+      this._majMondes();
+      this._verifierDeblocages();
+      this._verifierSucces();
+      emit(EV.DECOUVERTE, { resultat: this.store.elements.get(meta.id), creation: true });
+    }
     this._autosave();
-    return { ok: true, resultat, source: rep.source, avertissement: rep.avertissement };
+
+    const statut = dejaConnue ? STATUT.CONNU : STATUT.NOUVEAU;
+    emit(EV.FUSION, { statut, resultat: meta, creation: true });
+    return { ok: true, statut, resultat: meta, creation: true, source, avertissement, dejaConnue };
+  }
+
+  /** Ajoute la recette reproductible d'une création au magasin (idempotent). */
+  ajouterRecetteCreation(a, b, meta, cle = cleCreation(a, b)) {
+    this.store.ajouterRecettes([{
+      id: `c-${cle.replace(/[^a-z0-9]+/gi, '-')}`, a, b, result: meta.id,
+      categorie: meta.categorie, rarete: meta.rarete, monde: meta.monde,
+      source: 'creation', statut: 'officiel', valide: true, version: 1, lot: 'creation',
+    }]);
+  }
+
+  /**
+   * Construit les métadonnées définitives d'une création : les données du composeur
+   * (id, emoji, monde) servent de socle, celles de la proposition (IA ou locale) priment.
+   * Une catégorie inventée par le service IA est ramenée sur une catégorie existante du
+   * catalogue afin de garder des filtres cohérents.
+   */
+  _metaCreation(a, b, resultat) {
+    const base = this.engine.composerExperimental(a, b);
+    const src = resultat || {};
+    const id = src.id || base?.id;
+    const nom = src.nom || base?.nom;
+    if (!id || !nom) return null;
+    const ea = this.store.elements.get(a);
+    const eb = this.store.elements.get(b);
+    const categories = new Set([...this.store.elements.values()].map((e) => e.categorie));
+    const categorie = categories.has(src.categorie)
+      ? src.categorie
+      : (base?.categorie || ea?.categorie || 'Fantastique');
+    const rarete = RARETES.includes(src.rarete) ? src.rarete : (base?.rarete || 'Peu commun');
+    const monde = src.monde || base?.monde || ea?.monde || eb?.monde || 'libre';
+    return {
+      id,
+      nom,
+      categorie,
+      rarete,
+      monde,
+      emoji: src.emoji || base?.emoji || '✨',
+      description: src.description || base?.description || `Création issue de « ${ea?.nom ?? a} » et « ${eb?.nom ?? b} ».`,
+      creation: true,
+    };
+  }
+
+  /**
+   * Recharge dans le catalogue les créations enregistrées par le joueur, et officialise
+   * les anciennes « créations expérimentales » (versions précédentes) en les recomposant.
+   * Sans cela, un élément créé hier ne pourrait plus servir d'ingrédient aujourd'hui.
+   * @returns {number} nombre de créations migrées
+   */
+  _restaurerCreations() {
+    const creations = this.save.creations || (this.save.creations = {});
+    let migrees = 0;
+
+    for (const [ancienneCle, ancien] of Object.entries(this.save.experimental || {})) {
+      const [a, b] = String(ancienneCle).split('|');
+      if (!a || !b || !this.store.elements.has(a) || !this.store.elements.has(b)) continue;
+      const cle = cleCreation(a, b);
+      if (creations[cle]) continue;
+      const compo = this.engine.composerExperimental(a, b);
+      if (!compo) continue;
+      creations[cle] = {
+        ...compo, a, b,
+        source: ancien?.source || 'local',
+        date: ancien?.date || new Date().toISOString(),
+        migre: true,
+      };
+      migrees++;
+    }
+
+    for (const c of Object.values(creations)) {
+      if (!c?.id) continue;
+      this.store.ajouterElements({ [c.id]: { ...c, experimental: false, creation: true } });
+      if (c.a && c.b) this.ajouterRecetteCreation(c.a, c.b, c);
+      if (!this.save.decouvertes[c.id]) {
+        this.save.decouvertes[c.id] = {
+          id: c.id, date: c.date, source: 'creation',
+          rarete: c.rarete, categorie: c.categorie, monde: c.monde, premiere: true,
+        };
+      }
+    }
+    if (migrees) this.save.stats.decouvertes = countDecouvertes(this.save);
+    return migrees;
+  }
+
+  /** Compatibilité : ancien point d'entrée « aide IA », désormais une fusion Créativité. */
+  async fusionIA(a, b) {
+    return this.fusionner(a, b, { mode: 'creativite' });
   }
 
   _historiser(a, b, resultat, statut, mode) {
@@ -353,6 +504,9 @@ export class Jeu {
     if (apres > avant) {
       this.save.niveau = apres;
       const recompenses = recompenseNiveau(apres);
+      // Chaque niveau du joueur rapporte aussi une potion de familier.
+      this.save.potions = (this.save.potions || 0) + POTIONS.parNiveau;
+      recompenses.push({ type: 'potion', montant: POTIONS.parNiveau, nom: `🧪 ${POTIONS.parNiveau} potion de familier (+1 niveau, quota rechargé)` });
       this._evenementQuetes({ type: 'niveau', niveau: apres });
       emit(EV.NIVEAU, { niveau: apres, titre: titrePourNiveau(apres), recompenses });
       this._verifierDeblocages();
@@ -430,11 +584,13 @@ export class Jeu {
     quete.reclamee = true;
     this.save.stats.quetesTerminees = (this.save.stats.quetesTerminees || 0) + 1;
     const xp = quete.recompense?.xp || 50;
+    const potions = quete.recompense?.potions ?? POTIONS.parQuete;
+    this.save.potions = (this.save.potions || 0) + potions;
     this.ajouterXp(xp, { silencieux: true });
     this._majMondes();
     this._verifierSucces();
     this._autosave();
-    return { ok: true, xp };
+    return { ok: true, xp, potions };
   }
 
   _verifierSucces() {
@@ -523,6 +679,48 @@ export class Jeu {
     return { ok: true };
   }
 
+  /**
+   * Donne une potion à un familier :
+   *  - il monte d'EXACTEMENT un niveau,
+   *  - le quota d'aides est intégralement rechargé (3/5 -> 5/5, et 5/5 -> 10/5).
+   * Les potions se gagnent en montant de niveau et en réclamant des quêtes.
+   */
+  donnerPotion(familierId) {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const id = familierId || this.save.equipe[0];
+    const etat = id ? this.save.familiers[id] : null;
+    if (!etat) return { ok: false, erreur: 'Choisissez un familier possédé pour lui donner la potion.' };
+    if ((this.save.potions || 0) <= 0) {
+      return { ok: false, erreur: 'Aucune potion disponible : gagnez-en en montant de niveau ou en réclamant des quêtes.' };
+    }
+
+    this.save.potions -= 1;
+    const info = niveauFamilier(etat.xp);
+    const avant = etat.niveau;
+    const { etat: maj } = gagnerXpFamilier(etat, Math.max(1, info.requis - info.dansNiveau));
+    this.save.familiers[id] = { ...maj, niveau: avant + 1 };
+
+    const recharge = this.quota.rechargerComplet();
+    this.save.aideQuota = this.quota.etat();
+    this._verifierSucces();
+    this._autosave(true);
+    emit(EV.FAMILIER, { type: 'niveau', id, niveau: this.save.familiers[id].niveau });
+
+    return {
+      ok: true,
+      familier: id,
+      nom: this.petIndex.get(id)?.nom || id,
+      emoji: this.petIndex.get(id)?.emoji || '🐾',
+      niveau: this.save.familiers[id].niveau,
+      niveauPrecedent: avant,
+      potions: this.save.potions,
+      restant: recharge.restant,
+      bonus: recharge.bonus,
+      max: QUOTA.max,
+      tempsRestant: this.quota.tempsRestant(),
+    };
+  }
+
   _xpFamiliers(montant) {
     for (const id of this.save.equipe) {
       const etat = this.save.familiers[id];
@@ -607,9 +805,22 @@ export class Jeu {
     return null;
   }
 
+  /**
+   * État affichable du quota d'aides.
+   * `bonus` : une potion donnée alors que le quota était plein l'a poussé au-delà du
+   * maximum (affiché « 10 / 5 ») ; la recharge de 10 minutes ramène ensuite à 5/5.
+   */
   etatQuota() {
-    if (!this.quota) return { restant: 0, tempsRestant: 0, max: 0 };
-    return { restant: this.quota.disponibles(), tempsRestant: this.quota.tempsRestant(), max: 5 };
+    if (!this.quota) return { restant: 0, tempsRestant: 0, max: QUOTA.max, bonus: false, potions: 0 };
+    const restant = this.quota.disponibles();
+    return {
+      restant,
+      tempsRestant: this.quota.tempsRestant(),
+      max: QUOTA.max,
+      bonusMax: QUOTA.bonusMax,
+      bonus: restant > QUOTA.max,
+      potions: this.save?.potions || 0,
+    };
   }
 
   /* ------------------------------------------------------------------ */
@@ -683,8 +894,12 @@ export class Jeu {
       ratio: prog.ratio,
       decouvertes: countDecouvertes(s),
       totalElements: this.store.nombreElements,
-      recettesOfficielles: this.store.nombreRecettes,
+      // Les créations du joueur sont officielles pour SA partie : on les compte à part
+      // du catalogue livré avec le jeu.
+      recettesOfficielles: Math.max(0, this.store.nombreRecettes - Object.keys(s.creations || {}).length),
+      creations: Object.keys(s.creations || {}).length,
       recettesExperimentales: Object.keys(s.experimental || {}).length,
+      potions: s.potions || 0,
       fusionsTentees: s.stats.fusionsTentees,
       quetesTerminees: s.stats.quetesTerminees,
       mondesDebloques: Object.values(s.mondes || {}).filter(Boolean).length,

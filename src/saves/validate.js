@@ -123,7 +123,7 @@ export function validerTexteSauvegarde(texte) {
   } catch (e) {
     return { ok: false, erreur: ERREURS.JSON_INVALIDE, details: String(e.message || e) };
   }
-  return validerSauvegarde(depaquetter(data));
+  return validerSauvegarde(depaqueter(data));
 }
 
 /**

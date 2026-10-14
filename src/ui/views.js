@@ -149,7 +149,11 @@ export class Vues {
         el('span', { 'aria-hidden': 'true', text: meta.emoji || '✨' }),
         el('span', { text: meta.nom }),
       ]),
-      el('span', { class: 'meta' }, [el('span', { class: 'badge', text: meta.rarete }), ' ', meta.categorie]),
+      el('span', { class: 'meta' }, [
+        el('span', { class: 'badge', text: meta.rarete }), ' ', meta.categorie,
+        meta.creation ? ' ' : null,
+        meta.creation ? el('span', { class: 'badge badge-creation', text: '🧬 Création' }) : null,
+      ]),
       el('span', { class: 'meta', text: meta.description || '' }),
     ]);
   }
@@ -219,8 +223,9 @@ export class Vues {
           el('span', { text: connu ? meta.nom : '???' }),
         ]),
         el('span', { class: 'badge', text: meta.rarete }),
+        meta.creation ? el('span', { class: 'badge badge-creation', text: '🧬 Création' }) : null,
       ]),
-      el('div', { class: 'meta', text: `🏷️ ${meta.categorie} · 🗺️ monde ${meta.monde}` }),
+      el('div', { class: 'meta', text: `🏷️ ${meta.categorie} · 🗺️ monde ${meta.monde}${meta.creation ? ' · 🧬 création enregistrée' : ''}` }),
       el('div', { class: 'meta', text: connu ? (meta.description || '') : '🔒 Élément non découvert.' }),
     ]);
 
@@ -313,7 +318,7 @@ export class Vues {
       el('h4', { text: quete.nom }),
       el('p', { class: 'muted', text: quete.description || '' }),
       el('div', { class: 'progress' }, [el('span', { style: { width: `${Math.round(ratio * 100)}%` } })]),
-      el('div', { class: 'meta', text: `${progression} / ${objectif} · récompense ${quete.recompense?.xp ?? 0} XP` }),
+      el('div', { class: 'meta', text: `${progression} / ${objectif} · récompense ${quete.recompense?.xp ?? 0} XP + 🧪 ${quete.recompense?.potions ?? 1} potion(s)` }),
     ]);
     if (scope === 'scenarisees') {
       const etape = quete.etapes?.[quete.etape];
@@ -327,7 +332,7 @@ export class Vues {
         class: 'btn btn-primary btn-sm',
         onClick: async () => {
           const r = this.jeu.reclamerQuete(scope, quete.id);
-          if (r.ok) { toast(`Récompense : +${r.xp} XP`, 'good'); this.quetes(); this.majTopbar(); }
+          if (r.ok) { toast(`Récompense : +${r.xp} XP et 🧪 +${r.potions} potion(s)`, 'good'); this.quetes(); this.majTopbar(); }
           else toast(r.erreur, 'warn');
           await this.jeu.sauvegarder();
         },
@@ -382,20 +387,44 @@ export class Vues {
     const carte = $('#quota-card');
     clear(carte);
     const etat = this.jeu.etatQuota();
-    const minuteur = el('div', { class: 'meta', text: etat.tempsRestant > 0 ? `Prochaine recharge dans ${formatDuree(etat.tempsRestant)}` : 'Quota plein.' });
+    const minuteur = el('div', { class: 'meta' });
+    const rafraichirMinuteur = (e) => {
+      if (e.bonus) {
+        minuteur.textContent = `🧪 Bonus de potion actif : ${e.restant} aides. Le compteur revient à ${e.max} / ${e.max} à la prochaine recharge de 10 minutes.`;
+      } else {
+        minuteur.textContent = e.tempsRestant > 0 ? `⏳ Prochaine recharge dans ${formatDuree(e.tempsRestant)}` : '✅ Quota plein.';
+      }
+    };
+    rafraichirMinuteur(etat);
     carte.append(el('div', {}, [
-      el('div', { class: 'title' }, [el('span', { 'aria-hidden': 'true', text: '🧰' }), el('span', { text: `Aides : ${etat.restant} / ${etat.max}` })]),
+      el('div', { class: 'title' }, [el('span', { 'aria-hidden': 'true', text: '🧰' }), el('span', { text: `Aides : ${etat.restant} / ${etat.max}${etat.bonus ? ' 🧪' : ''}` })]),
       el('div', { class: 'meta', text: 'ℹ️ Quota commun à tous les familiers et à tous les types d\'aide (5 par 10 minutes).' }),
       minuteur,
+      el('div', { class: 'meta good', text: `🧪 Potions de familier : ${etat.potions} — une potion donne +1 niveau à un animal ET recharge le quota d'aides (3/5 → 5/5, et 5/5 → 10/5).` }),
     ]));
     const pips = el('div', { class: 'quota-pips', 'aria-hidden': 'true' });
-    for (let i = 0; i < etat.max; i++) pips.append(el('span', { class: `pip ${i < etat.restant ? 'on' : ''}` }));
+    const total = Math.max(etat.max, etat.restant);
+    for (let i = 0; i < total; i++) {
+      const classes = ['pip'];
+      if (i < etat.restant) classes.push('on');
+      if (i >= etat.max) classes.push('bonus');
+      pips.append(el('span', { class: classes.join(' ') }));
+    }
     carte.append(pips);
     clearInterval(this._timerQuota);
-    this._timerQuota = setInterval(() => {
-      const e2 = this.jeu.etatQuota();
-      minuteur.textContent = e2.tempsRestant > 0 ? `⏳ Prochaine recharge dans ${formatDuree(e2.tempsRestant)}` : '✅ Quota plein.';
-    }, 1000);
+    this._timerQuota = setInterval(() => rafraichirMinuteur(this.jeu.etatQuota()), 1000);
+  }
+
+  /** Donne une potion à un familier : +1 niveau et quota d'aides rechargé. */
+  _donnerPotion(familierId) {
+    const r = this.jeu.donnerPotion(familierId);
+    if (!r.ok) { toast(r.erreur, 'warn'); return; }
+    toast(
+      `${r.emoji} ${r.nom} passe au niveau ${r.niveau} · quota d'aides ${r.restant}/${r.max}${r.bonus ? ' (bonus de potion 🧪)' : ''} · potions restantes : ${r.potions}`,
+      'good', 9000,
+    );
+    this.familiers();
+    this.majTopbar();
   }
 
   _rendreActionsAide() {
@@ -468,6 +497,12 @@ export class Vues {
                 if (!r.ok) toast(r.erreur, 'warn'); else this.familiers();
                 this.jeu.sauvegarder();
               } }, ['➕ Ajouter à l\'équipe']),
+          el('button', {
+            class: 'btn btn-sm',
+            title: 'Une potion donne +1 niveau à ce familier et recharge le quota d\'aides.',
+            disabled: (this.save.potions || 0) <= 0,
+            onClick: () => this._donnerPotion(def.id),
+          }, [`🧪 Donner une potion (${this.save.potions || 0})`]),
         ]));
       } else {
         carte.append(el('span', { class: 'meta', text: '🔓 Déblocage : progressez (découvertes, niveaux) pour l\'obtenir.' }));
@@ -679,7 +714,7 @@ export class Vues {
 
     const selMode = el('select', { class: 'input' }, [
       el('option', { value: 'catalogue', text: '📚 Catalogue (recettes officielles uniquement)' }),
-      el('option', { value: 'creativite', text: '🧬 Créativité (propositions expérimentales + IA facultative)' }),
+      el('option', { value: 'creativite', text: '🧬 Créativité (crée de nouveaux éléments officiels + IA facultative)' }),
     ]);
     selMode.value = p.mode || 'catalogue';
     selMode.onchange = () => this.jeu.majParametres({ mode: selMode.value });
@@ -695,7 +730,7 @@ export class Vues {
       ligne('🔉 Volume', vol),
       ligne('🎞️ Réduire les animations', chkAnim, 'Confort visuel et accessibilité.'),
       ligne('🔠 Taille du texte', taille),
-      ligne('🧪 Mode de fusion', selMode, 'Le mode Catalogue ne compte que les recettes officielles validées.'),
+      ligne('🧪 Mode de fusion', selMode, 'En Créativité, une paire inconnue crée un nouvel élément : il est enregistré comme officiel, ajouté à l\'inventaire et devient reproductible.'),
       ligne('💾 Sauvegarde automatique', chkAuto),
       el('div', { class: 'row' }, [
         el('button', { class: 'btn', onClick: () => { this.jeu.majParametres({ theme: 'cosmos' }); this.onAction('parametres'); } }, ['♻️ Réinitialiser les paramètres']),
@@ -751,7 +786,8 @@ export class Vues {
       ['🧪 Fusions tentées', st.fusionsTentees],
       ['🔬 Découvertes', `${st.decouvertes} / ${st.totalElements}`],
       ['📚 Recettes officielles du catalogue', st.recettesOfficielles],
-      ['🧬 Créations expérimentales', st.recettesExperimentales],
+      ['🧬 Créations enregistrées (officielles)', st.creations],
+      ['🧪 Potions de familier', st.potions],
       ['📜 Quêtes terminées', st.quetesTerminees],
       ['🗺️ Mondes débloqués', st.mondesDebloques],
       ['🐾 Familiers possédés', st.familiers],
@@ -791,9 +827,10 @@ export class Vues {
       { t: '👋 Bienvenue', c: 'Vous démarrez avec exactement quatre éléments : Feu 🔥, Eau 💧, Terre 🌍 et Vent 💨.' },
       { t: '🖐️ Déplacer', c: 'Cliquez un élément dans la palette pour l\'ajouter au plateau. Glissez-le avec la souris ou le doigt pour l\'organiser.' },
       { t: '⚗️ Fusionner', c: 'Déposez un élément sur un autre pour fusionner, ou sélectionnez deux éléments et appuyez sur « Fusionner » (contrôle accessible).' },
-      { t: '🔬 Découvrir', c: 'Une nouvelle recette donne de l\'expérience. Le mode Créativité permet des propositions expérimentales, clairement signalées.' },
+      { t: '🔬 Découvrir', c: 'Une nouvelle recette donne de l\'expérience. En mode Créativité, une paire inconnue crée un élément : il est enregistré comme officiel, ajouté à l\'inventaire et réutilisable comme ingrédient (aucune question posée).' },
       { t: '🚀 Progresser', c: 'Les quêtes, succès, mondes et collections donnent de l\'XP et des récompenses.' },
       { t: '🧰 Aides', c: 'Vos familiers offrent 5 aides par tranche de 10 minutes, partagées entre tous les animaux. Une aide n\'est décomptée que si elle fournit un résultat utile.' },
+      { t: '🧪 Potions', c: 'Vous gagnez des potions en montant de niveau et en réclamant des quêtes. Donnez-en une à un animal depuis l\'écran Familiers : il gagne exactement un niveau et votre quota d\'aides est rechargé (3/5 → 5/5, et 5/5 → 10/5).' },
       { t: '💾 Sauvegardes', c: 'Trois emplacements indépendants. Exportez en JSON, importez avec validation. Aucun compte ni e-mail nécessaire.' },
     ];
     let i = 0;

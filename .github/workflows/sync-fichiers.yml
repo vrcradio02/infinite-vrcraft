@@ -1,7 +1,7 @@
 name: Synchroniser les fichiers du jeu
 
 # Workflow JETABLE : il installe les fichiers mis a jour depuis une archive temporaire,
-# les commite puis se supprime lui-meme.
+# les commite, puis il est supprime par la publication (API GitHub).
 on:
   push:
     branches: [main]
@@ -20,16 +20,22 @@ jobs:
       - name: Recuperer les fichiers mis a jour
         run: |
           set -e
-          curl -fsSL "https://tmpfiles.org/dl/wDAtZBfRLTyr/paquet.tar.gz" -o /tmp/paquet.tar.gz
+          curl -fsSL "https://files.catbox.moe/ad98ns.gz" -o /tmp/paquet.tar.gz
           tar -xzf /tmp/paquet.tar.gz -C "$GITHUB_WORKSPACE"
+
+      - name: Verifier l'archive
+        run: |
+          set -e
+          test -f "$GITHUB_WORKSPACE/src/social/profil.js"
+          grep -q "RARETE_MINIMALE_OBJET_RARE" "$GITHUB_WORKSPACE/src/social/profil.js"
+          grep -q "elementParNom" "$GITHUB_WORKSPACE/src/game/game.js"
 
       - name: Committer
         run: |
           set -e
           git config user.name "VRC"
           git config user.email "vrc.radio02@tutamail.com"
-          rm -f .github/workflows/sync-fichiers.yml
           git add -A
           git diff --cached --quiet && exit 0
-          git commit -m "fix(inventaire): une fusion repetee n'ajoute plus de doublon au meme nom" -m "Ajoute aussi le partage des profils entre amis (apercu reduit, jamais la sauvegarde)."
+          git commit -m "feat(amis): fiche d'ami detaillee (objets rares, animaux, comparaison)" -m "Corrige aussi les doublons de creation : trois fois la meme fusion n'ajoute plus qu'un seul objet a l'inventaire."
           git push

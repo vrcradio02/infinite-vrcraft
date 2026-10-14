@@ -15,11 +15,12 @@
   <!-- Ecran de chargement -->
   <div id="boot" class="boot">
     <img src="./assets/logo.svg" alt="Logo Infinite Craft Ultimate" class="boot-logo" />
-    <h1 class="boot-title">Infinite Craft Ultimate</h1>
-    <p class="boot-sub" data-i18n="boot.loading">Chargement du catalogue…</p>
+    <h1 class="boot-title">✨ Infinite Craft Ultimate ✨</h1>
+    <p class="boot-sub"><span aria-hidden="true">📚</span> <span data-i18n="boot.loading">Chargement du catalogue…</span></p>
+    <p class="muted">🔥 💧 🌍 💨</p>
     <div class="boot-bar"><span id="boot-bar-fill"></span></div>
     <noscript>
-      <p class="error">Ce jeu nécessite JavaScript pour fonctionner.</p>
+      <p class="error">⚠️ Ce jeu nécessite JavaScript pour fonctionner.</p>
     </noscript>
   </div>
 
@@ -29,7 +30,7 @@
       <button class="icon-btn" id="btn-menu" aria-label="Ouvrir le menu" aria-expanded="false">☰</button>
       <div class="brand">
         <img src="./assets/logo.svg" alt="" class="brand-logo" />
-        <span class="brand-name">Infinite Craft Ultimate</span>
+        <span class="brand-name">✨ Infinite Craft Ultimate</span>
       </div>
       <div class="topbar-stats" id="topbar-stats" aria-live="polite"></div>
     </header>
@@ -57,7 +58,7 @@
         <div class="hero">
           <img src="./assets/logo.svg" alt="" class="hero-logo" />
           <div>
-            <h2 class="hero-title">Infinite Craft Ultimate</h2>
+            <h2 class="hero-title">✨ Infinite Craft Ultimate</h2>
             <p class="muted" data-i18n="home.tagline">Combinez Feu, Eau, Terre et Vent pour découvrir un univers infini.</p>
           </div>
         </div>
@@ -73,26 +74,27 @@
           <button class="card action-card" data-action="tutoriel"><span class="big">🎓</span><b data-i18n="home.tuto">Tutoriel</b><small data-i18n="home.tuto.sub">Apprendre à fusionner</small></button>
         </div>
         <div class="card" id="home-status">
-          <h3 data-i18n="home.status">État du jeu</h3>
+          <h3>📊 <span data-i18n="home.status">État du jeu</span></h3>
           <ul class="kv" id="home-status-list"></ul>
         </div>
       </section>
 
       <!-- JEU / ATELIER -->
       <section class="screen" id="screen-jeu" data-screen="jeu" hidden>
+        <h2>🧪 <span data-i18n="nav.jeu">Atelier</span></h2>
         <div class="toolbar">
           <div class="tool-group">
-            <button class="btn" id="btn-zoom-out" title="Zoom arrière">−</button>
+            <button class="btn" id="btn-zoom-out" title="🔎 Zoom arrière" aria-label="Zoom arrière">−</button>
             <span class="zoom-label" id="zoom-label">100%</span>
-            <button class="btn" id="btn-zoom-in" title="Zoom avant">+</button>
-            <button class="btn" id="btn-center" data-i18n="board.center">Recentrer</button>
-            <button class="btn" id="btn-clean" data-i18n="board.clean">Nettoyer le plateau</button>
-            <button class="btn" id="btn-undo" data-i18n="board.undo">Annuler</button>
-            <button class="btn" id="btn-redo" data-i18n="board.redo">Rétablir</button>
+            <button class="btn" id="btn-zoom-in" title="🔍 Zoom avant" aria-label="Zoom avant">+</button>
+            <button class="btn" id="btn-center">🎯 <span data-i18n="board.center">Recentrer</span></button>
+            <button class="btn" id="btn-clean">🧹 <span data-i18n="board.clean">Nettoyer le plateau</span></button>
+            <button class="btn" id="btn-undo">↩️ <span data-i18n="board.undo">Annuler</span></button>
+            <button class="btn" id="btn-redo">↪️ <span data-i18n="board.redo">Rétablir</span></button>
           </div>
           <div class="tool-group">
-            <input type="search" id="board-search" class="input" data-i18n-ph="board.search" placeholder="Rechercher un élément…" />
-            <button class="btn btn-primary" id="btn-fuse-selected" data-i18n="board.fuse">Fusionner</button>
+            <input type="search" id="board-search" class="input" data-i18n-ph="board.search" placeholder="🔎 Rechercher un élément…" />
+            <button class="btn btn-primary" id="btn-fuse-selected">⚗️ <span data-i18n="board.fuse">Fusionner</span></button>
           </div>
         </div>
         <div class="board-wrap">
@@ -100,8 +102,8 @@
             <div id="board-canvas" class="board-canvas"></div>
           </div>
           <aside class="pane" id="board-palette" aria-label="Palette d'éléments">
-            <h3 data-i18n="board.palette">Éléments disponibles</h3>
-            <input type="search" id="palette-search" class="input" placeholder="Filtrer…" aria-label="Filtrer la palette" />
+            <h3>🎨 <span data-i18n="board.palette">Éléments disponibles</span></h3>
+            <input type="search" id="palette-search" class="input" placeholder="🔎 Filtrer…" aria-label="Filtrer la palette" />
             <div id="palette-list" class="palette-list"></div>
           </aside>
         </div>
@@ -109,21 +111,22 @@
           <span data-i18n="board.selection">Sélection :</span>
           <b id="sel-a" class="chip chip-empty">—</b>
           <b id="sel-b" class="chip chip-empty">—</b>
-          <button class="btn btn-sm" id="btn-clear-sel" data-i18n="board.clearSel">Vider</button>
+          <button class="btn btn-sm" id="btn-clear-sel">🧽 <span data-i18n="board.clearSel">Vider</span></button>
         </div>
       </section>
 
       <!-- INVENTAIRE -->
       <section class="screen" id="screen-inventaire" data-screen="inventaire" hidden>
+        <h2>🎒 <span data-i18n="nav.inventaire">Inventaire</span></h2>
         <div class="toolbar">
-          <input type="search" id="inv-search" class="input" placeholder="Rechercher…" aria-label="Rechercher dans l'inventaire" />
+          <input type="search" id="inv-search" class="input" placeholder="🔎 Rechercher…" aria-label="Rechercher dans l'inventaire" />
           <select id="inv-cat" class="input" aria-label="Filtrer par catégorie"></select>
           <select id="inv-rare" class="input" aria-label="Filtrer par rareté"></select>
           <select id="inv-sort" class="input" aria-label="Trier">
-            <option value="recent">Plus récent</option>
-            <option value="alpha">Alphabétique</option>
-            <option value="rarete">Rareté</option>
-            <option value="categorie">Catégorie</option>
+            <option value="recent">🕒 Plus récent</option>
+            <option value="alpha">🔤 Alphabétique</option>
+            <option value="rarete">💎 Rareté</option>
+            <option value="categorie">🏷️ Catégorie</option>
           </select>
         </div>
         <div id="inv-grid" class="grid grid-auto"></div>
@@ -132,20 +135,21 @@
 
       <!-- ENCYCLOPEDIE -->
       <section class="screen" id="screen-encyclopedie" data-screen="encyclopedie" hidden>
+        <h2>📖 <span data-i18n="nav.encyclopedie">Encyclopédie</span></h2>
         <div class="toolbar">
-          <input type="search" id="enc-search" class="input" placeholder="Rechercher un élément, une recette…" aria-label="Rechercher" />
+          <input type="search" id="enc-search" class="input" placeholder="🔎 Rechercher un élément, une recette…" aria-label="Rechercher" />
           <select id="enc-cat" class="input" aria-label="Catégorie"></select>
           <select id="enc-rare" class="input" aria-label="Rareté"></select>
           <select id="enc-monde" class="input" aria-label="Monde"></select>
           <select id="enc-date" class="input" aria-label="Date">
-            <option value="">Toutes les dates</option>
-            <option value="today">Aujourd'hui</option>
-            <option value="week">7 derniers jours</option>
+            <option value="">📅 Toutes les dates</option>
+            <option value="today">⭐ Aujourd'hui</option>
+            <option value="week">🗓️ 7 derniers jours</option>
           </select>
           <select id="enc-known" class="input" aria-label="Statut">
-            <option value="">Découverts et inconnus</option>
-            <option value="yes">Découverts</option>
-            <option value="no">Non découverts</option>
+            <option value="">🔍 Découverts et inconnus</option>
+            <option value="yes">✅ Découverts</option>
+            <option value="no">🔒 Non découverts</option>
           </select>
         </div>
         <div id="enc-list" class="enc-list"></div>
@@ -154,94 +158,95 @@
 
       <!-- QUETES -->
       <section class="screen" id="screen-quetes" data-screen="quetes" hidden>
-        <h2 data-i18n="quests.title">Quêtes</h2>
+        <h2>📜 <span data-i18n="quests.title">Quêtes</span></h2>
         <div id="quests-body"></div>
-        <h2 data-i18n="quests.ach">Succès</h2>
+        <h2>🏅 <span data-i18n="quests.ach">Succès</span></h2>
         <div id="ach-body" class="grid grid-auto"></div>
       </section>
 
       <!-- MONDES -->
       <section class="screen" id="screen-mondes" data-screen="mondes" hidden>
-        <h2 data-i18n="worlds.title">Mondes</h2>
+        <h2>🗺️ <span data-i18n="worlds.title">Mondes</span></h2>
         <p class="muted" data-i18n="worlds.sub">Débloquez de nouveaux univers en progressant.</p>
         <div id="worlds-body" class="grid grid-auto"></div>
       </section>
 
       <!-- FAMILIERS -->
       <section class="screen" id="screen-familiers" data-screen="familiers" hidden>
-        <h2 data-i18n="pets.title">Familiers</h2>
+        <h2>🐾 <span data-i18n="pets.title">Familiers</span></h2>
         <div class="card quota-card" id="quota-card"></div>
         <div class="grid grid-3" id="help-actions"></div>
-        <h3 data-i18n="pets.collection">Collection</h3>
+        <h3>📚 <span data-i18n="pets.collection">Collection</span></h3>
         <div id="pets-body" class="grid grid-auto"></div>
-        <h3 data-i18n="pets.team">Équipe active (3 max)</h3>
+        <h3>🤝 <span data-i18n="pets.team">Équipe active (3 max)</span></h3>
         <div id="pets-team" class="grid grid-auto"></div>
       </section>
 
       <!-- HISTORIQUE -->
       <section class="screen" id="screen-historique" data-screen="historique" hidden>
+        <h2>🕘 <span data-i18n="nav.historique">Historique</span></h2>
         <div class="toolbar">
           <select id="hist-filter" class="input" aria-label="Filtrer par statut">
-            <option value="">Tout</option>
-            <option value="nouveau">Nouvelles découvertes</option>
-            <option value="connu">Résultats connus</option>
-            <option value="inconnu">Sans résultat</option>
-            <option value="experimental">Expérimental</option>
+            <option value="">📋 Tout</option>
+            <option value="nouveau">✨ Nouvelles découvertes</option>
+            <option value="connu">🔁 Résultats connus</option>
+            <option value="inconnu">🚫 Sans résultat</option>
+            <option value="experimental">🧬 Expérimental</option>
           </select>
-          <button class="btn" id="btn-hist-clear" data-i18n="history.clear">Effacer l'historique</button>
+          <button class="btn" id="btn-hist-clear">🧹 <span data-i18n="history.clear">Effacer l'historique</span></button>
         </div>
         <div id="hist-body"></div>
       </section>
 
       <!-- SAUVEGARDES -->
       <section class="screen" id="screen-sauvegardes" data-screen="sauvegardes" hidden>
-        <h2 data-i18n="saves.title">Sauvegardes</h2>
+        <h2>💾 <span data-i18n="saves.title">Sauvegardes</span></h2>
         <p class="muted" data-i18n="saves.sub">Trois emplacements totalement indépendants. Exportez et importez au format JSON.</p>
         <div id="saves-body" class="grid grid-3"></div>
         <div class="card">
-          <h3 data-i18n="saves.import">Importer une sauvegarde</h3>
+          <h3>📥 <span data-i18n="saves.import">Importer une sauvegarde</span></h3>
           <p class="muted" data-i18n="saves.import.sub">Le fichier est analysé et validé avant utilisation. Aucun code n'est exécuté.</p>
           <input type="file" id="import-file" accept="application/json,.json" />
           <pre id="import-preview" class="code-preview" hidden></pre>
           <div class="row" id="import-actions" hidden>
             <select id="import-slot" class="input">
-              <option value="0">Sauvegarde 1</option>
-              <option value="1">Sauvegarde 2</option>
-              <option value="2">Sauvegarde 3</option>
+              <option value="0">💾 Sauvegarde 1</option>
+              <option value="1">💾 Sauvegarde 2</option>
+              <option value="2">💾 Sauvegarde 3</option>
             </select>
-            <button class="btn btn-primary" id="btn-import-confirm" data-i18n="saves.import.confirm">Importer dans cet emplacement</button>
-            <button class="btn" id="btn-import-cancel" data-i18n="common.cancel">Annuler</button>
+            <button class="btn btn-primary" id="btn-import-confirm">✅ <span data-i18n="saves.import.confirm">Importer dans cet emplacement</span></button>
+            <button class="btn" id="btn-import-cancel">✖️ <span data-i18n="common.cancel">Annuler</span></button>
           </div>
           <p id="import-error" class="error" hidden></p>
         </div>
         <div class="card">
-          <h3 data-i18n="saves.tools">Outils</h3>
-          <button class="btn" id="btn-export-all" data-i18n="saves.exportAll">Exporter le résumé des 3 emplacements</button>
+          <h3>🧰 <span data-i18n="saves.tools">Outils</span></h3>
+          <button class="btn" id="btn-export-all">📤 <span data-i18n="saves.exportAll">Exporter le résumé des 3 emplacements</span></button>
         </div>
       </section>
 
       <!-- PARAMETRES -->
       <section class="screen" id="screen-parametres" data-screen="parametres" hidden>
-        <h2 data-i18n="settings.title">Paramètres</h2>
+        <h2>⚙️ <span data-i18n="settings.title">Paramètres</span></h2>
         <div class="card" id="settings-body"></div>
-        <h3 data-i18n="settings.ai">Service IA facultatif</h3>
+        <h3>🤖 <span data-i18n="settings.ai">Service IA facultatif</span></h3>
         <div class="card" id="settings-ai"></div>
       </section>
 
       <!-- PROFIL -->
       <section class="screen" id="screen-profil" data-screen="profil" hidden>
-        <h2 data-i18n="profile.title">Profil</h2>
+        <h2>👤 <span data-i18n="profile.title">Profil</span></h2>
         <div id="profile-body"></div>
       </section>
 
       <!-- CREDITS -->
       <section class="screen" id="screen-credits" data-screen="credits" hidden>
-        <h2 data-i18n="credits.title">Crédits</h2>
+        <h2>ℹ️ <span data-i18n="credits.title">Crédits</span></h2>
         <div class="card">
-          <p><b>Infinite Craft Ultimate</b> — jeu de fusion original, jouable hors ligne, sans compte.</p>
-          <p>Nom provisoire, logo, couleurs et thèmes modifiables (voir <code>src/config.js</code> et <code>src/styles/main.css</code>).</p>
-          <p>Code sous licence MIT. Aucune clé d'API n'est intégrée au navigateur.</p>
-          <p><a href="https://github.com/vrcradio02/infinite-vrcraft" target="_blank" rel="noopener noreferrer">Dépôt GitHub</a></p>
+          <p><b>✨ Infinite Craft Ultimate</b> — jeu de fusion original, jouable hors ligne, sans compte.</p>
+          <p>🎨 Nom provisoire, logo, couleurs et thèmes modifiables (voir <code>src/config.js</code> et <code>src/styles/main.css</code>).</p>
+          <p>📜 Code sous licence MIT. Aucune clé d'API n'est intégrée au navigateur. 🔒</p>
+          <p>🐙 <a href="https://github.com/vrcradio02/infinite-vrcraft" target="_blank" rel="noopener noreferrer">Dépôt GitHub</a></p>
         </div>
       </section>
     </main>

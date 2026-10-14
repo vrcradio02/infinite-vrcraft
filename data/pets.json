@@ -1,0 +1,158 @@
+{
+  "meta": {
+    "version": 1,
+    "description": "Définitions des familiers. Ajouter un familier = ajouter une entrée ici, sans modifier le code."
+  },
+  "pets": [
+    {
+      "id": "flammichou",
+      "nom": "Flammichou",
+      "emoji": "🔥",
+      "rarete": "Commun",
+      "animation": "bounce",
+      "specialite": "Feu et énergie",
+      "description": "Une peluche ardente qui adore les éléments liés au feu et à l'énergie.",
+      "affinite": ["Énergie", "Météo"],
+      "competences": [
+        { "id": "indice_fusion", "nom": "Braises révélatrices", "niveauRequis": 1, "description": "Meilleur indice de fusion sur les éléments énergétiques." },
+        { "id": "analyse_fusion", "nom": "Lecture des flammes", "niveauRequis": 3, "description": "Analyse une fusion liée au feu." },
+        { "id": "suggestion_recette", "nom": "Étincelle d'idée", "niveauRequis": 5, "description": "Suggère une combinaison brûlante." }
+      ]
+    },
+    {
+      "id": "aquabulle",
+      "nom": "Aquabulle",
+      "emoji": "💧",
+      "rarete": "Commun",
+      "animation": "float",
+      "specialite": "Eau, glace et océans",
+      "description": "Une bulle vivante qui connaît tous les courants et les profondeurs.",
+      "affinite": ["Matière", "Nature", "Météo"],
+      "competences": [
+        { "id": "indice_fusion", "nom": "Courant porteur", "niveauRequis": 1, "description": "Indice orienté eau et glace." },
+        { "id": "aide_quete", "nom": "Carte des marées", "niveauRequis": 4, "description": "Aide à trouver un élément marin manquant." },
+        { "id": "analyse_fusion", "nom": "Analyse des profondeurs", "niveauRequis": 6, "description": "Explique les recettes aquatiques." }
+      ]
+    },
+    {
+      "id": "terrapousse",
+      "nom": "Terrapousse",
+      "emoji": "🌱",
+      "rarete": "Commun",
+      "animation": "sway",
+      "specialite": "Terre, minéraux et plantes",
+      "description": "Un petit gardien de la terre qui sent les racines et les filons.",
+      "affinite": ["Matière", "Vie", "Nature"],
+      "competences": [
+        { "id": "indice_fusion", "nom": "Radicelles curieuses", "niveauRequis": 1, "description": "Indice sur les minéraux et les plantes." },
+        { "id": "indice_exploration", "nom": "Sillon profond", "niveauRequis": 4, "description": "Oriente vers les zones peu explorées." },
+        { "id": "aide_quete", "nom": "Sève nourricière", "niveauRequis": 7, "description": "Aide les quêtes de collecte." }
+      ]
+    },
+    {
+      "id": "ventolino",
+      "nom": "Ventolino",
+      "emoji": "💨",
+      "rarete": "Peu commun",
+      "animation": "float",
+      "specialite": "Air, vent et météorologie",
+      "description": "Un tourbillon joueur qui relie les nuages et les courants.",
+      "affinite": ["Météo", "Énergie"],
+      "competences": [
+        { "id": "suggestion_recette", "nom": "Coup de vent", "niveauRequis": 1, "description": "Suggestion de combinaison aérienne." },
+        { "id": "indice_exploration", "nom": "Boussole des cimes", "niveauRequis": 3, "description": "Oriente vers un monde à explorer." },
+        { "id": "indice_fusion", "nom": "Murmure des nuages", "niveauRequis": 6, "description": "Indice sur les recettes météo." }
+      ]
+    },
+    {
+      "id": "pixelou",
+      "nom": "Pixelou",
+      "emoji": "🟦",
+      "rarete": "Peu commun",
+      "animation": "glitch",
+      "specialite": "Technologie et numérique",
+      "description": "Une créature de pixels qui décompose tout en données.",
+      "affinite": ["Technologie"],
+      "competences": [
+        { "id": "analyse_fusion", "nom": "Décompilation", "niveauRequis": 1, "description": "Analyse détaillée d'une recette technologique." },
+        { "id": "suggestion_recette", "nom": "Algorithme créatif", "niveauRequis": 4, "description": "Propose une combinaison de haute technologie." },
+        { "id": "aide_quete", "nom": "Requête optimisée", "niveauRequis": 8, "description": "Aide les quêtes technologiques." }
+      ]
+    },
+    {
+      "id": "lumifee",
+      "nom": "Lumifée",
+      "emoji": "🧚",
+      "rarete": "Rare",
+      "animation": "pulse",
+      "specialite": "Indices, secrets et découvertes rares",
+      "description": "Une fée lumineuse attirée par les mystères et les éléments rares.",
+      "affinite": ["Concept", "Fantastique"],
+      "competences": [
+        { "id": "indice_fusion", "nom": "Poussière d'indice", "niveauRequis": 1, "description": "Indice vers les recettes rares." },
+        { "id": "indice_exploration", "nom": "Lueur des secrets", "niveauRequis": 3, "description": "Révèle l'existence de secrets cachés." },
+        { "id": "aide_quete", "nom": "Fil d'ariane", "niveauRequis": 5, "description": "Aide précieuse pour les quêtes scénarisées." }
+      ]
+    },
+    {
+      "id": "dragoforge",
+      "nom": "Dragoforge",
+      "emoji": "🐉",
+      "rarete": "Épique",
+      "animation": "pulse",
+      "specialite": "Fusions complexes",
+      "description": "Un jeune dragon forgeron qui assemble les éléments difficiles.",
+      "affinite": ["Fantastique", "Technologie"],
+      "competences": [
+        { "id": "indice_fusion", "nom": "Souffle de forge", "niveauRequis": 1, "description": "Indice sur les fusions à plusieurs étapes." },
+        { "id": "analyse_fusion", "nom": "Œil du forgeron", "niveauRequis": 4, "description": "Analyse les chaînes de recettes." },
+        { "id": "suggestion_recette", "nom": "Alliage inédit", "niveauRequis": 9, "description": "Suggère une combinaison à fort potentiel." }
+      ]
+    },
+    {
+      "id": "nebulapin",
+      "nom": "Nebulapin",
+      "emoji": "🐰",
+      "rarete": "Épique",
+      "animation": "float",
+      "specialite": "Espace et mondes cosmiques",
+      "description": "Un lapin stellaire qui bondit d'étoile en étoile.",
+      "affinite": ["Espace"],
+      "competences": [
+        { "id": "indice_exploration", "nom": "Saut d'étoile", "niveauRequis": 1, "description": "Oriente vers les éléments cosmiques." },
+        { "id": "indice_fusion", "nom": "Carte du ciel", "niveauRequis": 3, "description": "Indice sur les recettes spatiales." },
+        { "id": "aide_quete", "nom": "Orbite utile", "niveauRequis": 7, "description": "Aide les quêtes cosmiques." }
+      ]
+    },
+    {
+      "id": "robochat",
+      "nom": "RoboChat",
+      "emoji": "🤖",
+      "rarete": "Rare",
+      "animation": "glitch",
+      "specialite": "Organisation et analyse des recettes",
+      "description": "Un félin mécanique qui classe, trie et recoupe l'information.",
+      "affinite": ["Technologie", "Culture"],
+      "competences": [
+        { "id": "analyse_fusion", "nom": "Rapport analytique", "niveauRequis": 1, "description": "Analyse la plus détaillée du catalogue." },
+        { "id": "indice_exploration", "nom": "Inventaire croisé", "niveauRequis": 2, "description": "Repère les catégories incomplètes." },
+        { "id": "suggestion_recette", "nom": "Recommandation", "niveauRequis": 5, "description": "Suggère la combinaison la plus prometteuse." }
+      ]
+    },
+    {
+      "id": "glitchou",
+      "nom": "Glitchou",
+      "emoji": "👾",
+      "rarete": "Mythique",
+      "animation": "glitch",
+      "specialite": "Mode expérimental et idées surprenantes",
+      "description": "Une anomalie joyeuse qui adore les résultats inattendus.",
+      "affinite": ["Concept"],
+      "competences": [
+        { "id": "suggestion_recette", "nom": "Idée bancale", "niveauRequis": 1, "description": "Suggestion originale, parfois géniale." },
+        { "id": "indice_fusion", "nom": "Piste improbable", "niveauRequis": 3, "description": "Indice vers un secret ou un easter egg." },
+        { "id": "analyse_fusion", "nom": "Bogue volontaire", "niveauRequis": 6, "description": "Explique les recettes expérimentales." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "meta": { "version": 1, "description": "Quêtes du jeu. Les types sont interprétés par src/quests/quests.js." },
+
+  "quotidiennes": [
+    { "id": "q-decouvrir-5", "nom": "Éclaireur du jour", "description": "Découvrir 5 nouveaux éléments.", "type": "decouvrir", "objectif": 5, "recompense": { "xp": 60 } },
+    { "id": "q-fusions-10", "nom": "Atelier actif", "description": "Réussir 10 fusions.", "type": "fusions", "objectif": 10, "recompense": { "xp": 50 } },
+    { "id": "q-cat-nature", "nom": "Promenade verte", "description": "Découvrir 3 éléments de catégorie Nature.", "type": "categorie", "cible": "Nature", "objectif": 3, "recompense": { "xp": 55 } },
+    { "id": "q-cat-technologie", "nom": "Bricolage", "description": "Découvrir 3 éléments de catégorie Technologie.", "type": "categorie", "cible": "Technologie", "objectif": 3, "recompense": { "xp": 55 } },
+    { "id": "q-cat-cuisine", "nom": "Petite faim", "description": "Découvrir 3 éléments de catégorie Cuisine.", "type": "categorie", "cible": "Cuisine", "objectif": 3, "recompense": { "xp": 55 } },
+    { "id": "q-rarete-rare", "nom": "Trouvaille rare", "description": "Découvrir un élément Rare ou plus rare.", "type": "rarete", "cible": "Rare", "objectif": 1, "recompense": { "xp": 80 } },
+    { "id": "q-monde-espace", "nom": "Tête dans les étoiles", "description": "Découvrir 2 éléments du monde Spatial.", "type": "monde", "cible": "espace", "objectif": 2, "recompense": { "xp": 70 } },
+    { "id": "q-famille-flamme", "nom": "Coup de main de Flammichou", "description": "Utiliser une aide de Flammichou.", "type": "familiers", "cible": "flammichou", "objectif": 1, "recompense": { "xp": 40 } }
+  ],
+
+  "hebdomadaires": [
+    { "id": "h-decouvrir-40", "nom": "Grande exploration", "description": "Découvrir 40 nouveaux éléments cette semaine.", "type": "decouvrir", "objectif": 40, "recompense": { "xp": 400 } },
+    { "id": "h-fusions-150", "nom": "Forge ardente", "description": "Réussir 150 fusions cette semaine.", "type": "fusions", "objectif": 150, "recompense": { "xp": 350 } },
+    { "id": "h-collection", "nom": "Complétionniste", "description": "Compléter une collection thématique.", "type": "collection", "objectif": 1, "recompense": { "xp": 500 } },
+    { "id": "h-niveau-10", "nom": "Ascension", "description": "Atteindre le niveau 10.", "type": "niveau", "objectif": 10, "recompense": { "xp": 300 } },
+    { "id": "h-monde-fantastique", "nom": "Expédition fantastique", "description": "Découvrir 6 éléments du monde Fantastique.", "type": "monde", "cible": "fantastique", "objectif": 6, "recompense": { "xp": 380 } }
+  ],
+
+  "scenarios": [
+    {
+      "id": "s-lumiere-des-origines",
+      "nom": "La Lumière des Origines",
+      "description": "Un ancien alchimiste vous confie un fragment de savoir.",
+      "personnages": [
+        { "nom": "Alchimiste Nael", "emoji": "🧙", "replique": "Quatre éléments, et tout le reste à inventer. Montrez-moi que la matière vous obéit." }
+      ],
+      "etapes": [
+        { "nom": "Faire jaillir la vapeur", "description": "Combinez Feu et Eau.", "condition": { "type": "element", "cible": "vapeur" }, "dialogue": "Nael approuve : la transformation commence toujours par un contact." },
+        { "nom": "Faire naître la vie", "description": "Découvrez l'élément Vie.", "condition": { "type": "element", "cible": "vie" }, "dialogue": "Nael sourit : voilà le sel de toute aventure." },
+        { "nom": "Éclairer le monde", "description": "Découvrez la Lumière.", "condition": { "type": "element", "cible": "lumiere" }, "dialogue": "Nael : sans lumière, point de savoir." },
+        { "nom": "Écrire la suite", "description": "Découvrez l'écriture.", "condition": { "type": "element", "cible": "ecriture" }, "dialogue": "Nael vous remet sa plume. Le monde est vôtre." }
+      ],
+      "recompense": { "xp": 300 }
+    },
+    {
+      "id": "s-au-dela",
+      "nom": "Au-delà du ciel",
+      "description": "Une astronome cherche à cartographier l'infini.",
+      "personnages": [
+        { "nom": "Astronome Vela", "emoji": "🔭", "replique": "On ne voit bien l'univers qu'en le fabriquant soi-même." }
+      ],
+      "etapes": [
+        { "nom": "Première étoile", "description": "Découvrez une étoile.", "condition": { "type": "element", "cible": "etoile" }, "dialogue": "Vela note ses coordonnées en tremblant d'excitation." },
+        { "nom": "Une planète à nous", "description": "Découvrez une planète.", "condition": { "type": "element", "cible": "planete" }, "dialogue": "Vela : voilà un monde où poser le pied." },
+        { "nom": "La galaxie entière", "description": "Découvrez une galaxie.", "condition": { "type": "element", "cible": "galaxie" }, "dialogue": "Vela murmure : des milliards de soleils..." },
+        { "nom": "L'univers", "description": "Découvrez l'univers.", "condition": { "type": "element", "cible": "univers" }, "dialogue": "Vela vous confie le télescope. Continuez sans elle." }
+      ],
+      "recompense": { "xp": 450 }
+    },
+    {
+      "id": "s-menace-vecue",
+      "nom": "Le Gardien des Secrets",
+      "description": "Lumifée détecte une anomalie dans le catalogue.",
+      "personnages": [
+        { "nom": "Lumifée", "emoji": "🧚", "replique": "Il existe des recettes qu'on ne trouve pas tout seul. Suivez ma lumière." }
+      ],
+      "etapes": [
+        { "nom": "Trouver un secret", "description": "Découvrez l'élément Secret.", "condition": { "type": "element", "cible": "secret" }, "dialogue": "Lumifée frissonne : nous y voilà." },
+        { "nom": "L'infini", "description": "Découvrez l'infini.", "condition": { "type": "element", "cible": "infini" }, "dialogue": "Lumifée : l'infini ouvre toutes les portes." },
+        { "nom": "L'œuf de VRC", "description": "Découvrez l'Œuf de VRC.", "condition": { "type": "element", "cible": "oeuf-vrc" }, "dialogue": "Lumifée rit : vous avez trouvé l'easter egg. Bravo !" }
+      ],
+      "recompense": { "xp": 600 }
+    }
+  ]
+}

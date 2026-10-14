@@ -41,7 +41,7 @@ export function ouvrirModale({ titre, contenu, actions = [], onClose }) {
     }, [a.label]));
   }
   if (!actions.length) {
-    zoneActions.append(el('button', { class: 'btn', onClick: fermerModale }, ['Fermer']));
+    zoneActions.append(el('button', { class: 'btn', onClick: fermerModale }, ['✖️ Fermer']));
   }
 
   onCloseModale = onClose || null;

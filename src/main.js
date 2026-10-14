@@ -11,6 +11,9 @@ import { toast, ouvrirModale, enregistrerEcrans, allerA, activerMenu, activerRac
 import { setLangue, appliquerTraductions } from './i18n/index.js';
 import { jouer } from './game/audio.js';
 import { STATUT } from './fusion/engine.js';
+import { GAME } from './config.js';
+
+const VERSION = GAME.version;
 
 const jeu = new Jeu();
 let plateau = null;
@@ -20,6 +23,48 @@ const ECRANS = ['accueil', 'jeu', 'inventaire', 'encyclopedie', 'quetes', 'monde
 
 /* -------------------- Écran de chargement -------------------- */
 
+/** Au-delà de ce délai, le chargement est considéré comme bloqué (ms). */
+const DELAI_MAX_CHARGEMENT = 20000;
+let veilleChargement = null;
+let chargementTermine = false;
+
+/** Arrête la surveillance du chargement. */
+function arreterVeille() {
+  if (veilleChargement) { clearTimeout(veilleChargement); veilleChargement = null; }
+}
+
+/**
+ * Affiche un problème de chargement et les actions de secours.
+ *
+ * Sans cela, un chargement qui échoue laissait l'écran de chargement affiché
+ * indéfiniment, sans aucun moyen d'agir : le jeu était inaccessible.
+ */
+function signalerProblemeChargement(message) {
+  if (chargementTermine) return;
+  const sub = $('.boot-sub');
+  if (sub) { sub.textContent = message; sub.classList.add('error'); }
+  const actions = $('#boot-actions');
+  if (actions) actions.hidden = false;
+}
+
+/** Boutons de secours : recharger, ou vider cache + service worker puis recharger. */
+function activerActionsDeSecours() {
+  $('#btn-boot-reload')?.addEventListener('click', () => location.reload());
+  $('#btn-boot-reset')?.addEventListener('click', async () => {
+    try {
+      if (navigator?.serviceWorker?.getRegistrations) {
+        for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+      }
+      if (globalThis.caches?.keys) {
+        for (const k of await caches.keys()) await caches.delete(k);
+      }
+    } catch (e) {
+      console.warn('[boot] nettoyage partiel :', e.message);
+    }
+    location.reload();
+  });
+}
+
 /**
  * Passe de l'écran de chargement à l'application.
  *
@@ -28,6 +73,8 @@ const ECRANS = ['accueil', 'jeu', 'inventaire', 'encyclopedie', 'quetes', 'monde
  * pour toujours et le jeu était inaccessible). Le style en ligne garantit la bascule.
  */
 function afficherApplication() {
+  chargementTermine = true;
+  arreterVeille();
   const boot = $('#boot');
   if (boot) {
     boot.hidden = true;
@@ -42,15 +89,29 @@ function afficherApplication() {
 
 async function demarrer() {
   enregistrerEcrans(ECRANS);
+
+  // Les boutons de secours existent même si l'initialisation échoue plus bas.
+  activerActionsDeSecours();
+  const version = $('#boot-version');
+  if (version) version.textContent = `version ${VERSION}`;
+  const vApp = $('#app-version');
+  if (vApp) vApp.textContent = VERSION;
+  console.info(`[icu] version ${VERSION}`);
+
+  // Surveille le chargement : si rien ne progresse, l'utilisateur reçoit un message
+  // explicite et un bouton de rechargement (jamais d'attente infinie).
+  veilleChargement = setTimeout(() => {
+    signalerProblemeChargement(`⏳ Le chargement dépasse ${Math.round(DELAI_MAX_CHARGEMENT / 1000)} s. Vérifiez votre connexion, puis rechargez.`);
+  }, DELAI_MAX_CHARGEMENT);
+
   try {
     await jeu.initialiser((etape, ratio) => {
       $('.boot-sub').textContent = etape;
       $('#boot-bar-fill').style.width = `${Math.round(ratio * 100)}%`;
     });
   } catch (e) {
-    const sub = $('.boot-sub');
-    sub.textContent = `⚠️ Erreur au chargement : ${e.message}`;
-    sub.classList.add('error');
+    arreterVeille();
+    signalerProblemeChargement(`⚠️ Erreur au chargement : ${e.message}`);
     console.error(e);
     return;
   }
@@ -287,7 +348,23 @@ function appliquerPreferences() {
 function installerServiceWorker() {
   if (!navigator?.serviceWorker?.register) return; // API absente (http non sécurisé, mode privé...)
   if (location.protocol === 'file:') return; // le service worker exige http(s)
-  navigator.serviceWorker.register('./sw.js').catch((e) => {
+
+  // Si un service worker contrôlait déjà la page, une nouvelle version qui prend la
+  // main (correctif publié) doit se voir tout de suite : on recharge une seule fois.
+  const avaitControleur = Boolean(navigator.serviceWorker.controller);
+  let rechargeEffectuee = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!avaitControleur || rechargeEffectuee) return;
+    rechargeEffectuee = true;
+    location.reload();
+  });
+
+  navigator.serviceWorker.register('./sw.js').then((enregistrement) => {
+    // On cherche une mise à jour à chaque retour sur l'onglet.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) enregistrement.update?.().catch(() => {});
+    });
+  }).catch((e) => {
     console.warn('[sw] enregistrement impossible :', e.message);
   });
 }
@@ -295,4 +372,4 @@ function installerServiceWorker() {
 demarrer();
 
 // Exposé pour le débogage en console (sans donner accès à des secrets, il n'y en a aucun).
-window.__icu = { jeu, allerA, afficherApplication, plateau: () => plateau, vues: () => vues };
+window.__icu = { jeu, allerA, afficherApplication, version: VERSION, plateau: () => plateau, vues: () => vues };

@@ -8,7 +8,7 @@ export const GAME = {
   /** Nom provisoire — modifiable librement. */
   nom: 'Infinite Craft Ultimate',
   slug: 'infinite-vrcraft',
-  version: '1.0.0',
+  version: '1.0.1',
   depot: 'https://github.com/vrcradio02/infinite-vrcraft',
 };
 
@@ -48,8 +48,8 @@ export const TITRES = [
   { niveau: 18, titre: 'Inventeur' },
   { niveau: 28, titre: 'Scientifique' },
   { niveau: 40, titre: 'Maître des éléments' },
-  { niveau: 55, titre: 'Architecte de l\'univers' },
-  { niveau: 75, titre: 'Gardien de l\'infini' },
+  { niveau: 55, titre: "Architecte de l'univers" },
+  { niveau: 75, titre: "Gardien de l'infini" },
 ];
 
 /** Système d'aides partagé : 5 aides par fenêtre de 10 minutes (tous familiers confondus). */

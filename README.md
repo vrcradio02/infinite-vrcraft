@@ -4,6 +4,7 @@ Jeu de fusion d'éléments original, jouable dans le navigateur, **sans compte, 
 Il démarre avec exactement **Feu 🔥, Eau 💧, Terre 🌍 et Vent 💨**, puis grandit par fusions, quêtes, mondes,
 collections et familiers.
 
+- Jeu publié : <https://vrcradio02.github.io/infinite-vrcraft/>
 - Version locale : gratuite, aucune installation de serveur.
 - Hébergement statique : **GitHub Pages** (aucun build nécessaire pour publier).
 - Fonctionne **hors ligne** après le premier chargement (service worker).
@@ -37,8 +38,8 @@ Ouvrez ensuite <http://localhost:5173>.
 
 ### Installer les dépendances ?
 
-Aucune n'est requise pour jouer ni pour publier. Si vous voulez utiliser un outil externe
-plus tard, un `package-lock.json` n'existe pas volontairement : le projet reste sans dépendance.
+Aucune n'est requise pour jouer ni pour publier. Il n'y a volontairement pas de `package-lock.json` :
+le projet reste sans dépendance.
 
 ---
 
@@ -205,13 +206,11 @@ Notes importantes :
   (`data/elements.json` + `data/fusions/index.json` + `data/fusions/lot-*.json`),
   donc GitHub Pages fonctionne même sans lancer la compilation.
 
-### Variante automatisée (facultative)
+### Vérification automatique (facultative)
 
-`.github/workflows/pages.yml` compile le registre, lance les vérifications et les tests, puis
-publie le résultat sur Pages. Pour l'utiliser : **Settings → Pages → Source : GitHub Actions**.
-Cette variante sert aussi le registre compilé (démarrage un peu plus rapide), au prix d'une
-dépendance à l'exécution du workflow. La méthode « Deploy from a branch » ci-dessus reste la
-plus simple et fonctionne sans CI.
+`.github/workflows/verifier.yml` exécute `npm run build`, `npm run check` et `npm test` à chaque
+poussée et sur chaque demande de fusion. **Ce workflow ne publie rien** : la publication reste
+faite par la branche `main`, ce qui évite qu'une panne de CI empêche la mise à jour du jeu.
 
 ### Publier en local pour vérifier
 
@@ -416,7 +415,7 @@ npm run check
 ```
 
 ```
-Modules importés avec succès : 25/25
+Modules importés avec succès : 26/26
 HTML et JavaScript sont cohérents.
 Bootstrap navigateur exécuté sans erreur (DOM simulé).
 Registre valide.

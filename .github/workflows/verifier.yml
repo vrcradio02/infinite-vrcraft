@@ -1,0 +1,36 @@
+name: Verifier le projet
+
+// Ce workflow ne publie RIEN : GitHub Pages publie directement la branche `main`
+// (Settings → Pages → Deploy from a branch → main / root), ce qui ne demande aucun build.
+// Il sert uniquement à vérifier chaque modification : registre, cohérence, tests.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Le projet n'a AUCUNE dépendance : rien à installer.
+      - name: Compiler le registre officiel
+        run: npm run build
+
+      - name: Vérifications (modules, sélecteurs, fumée) et validation du registre
+        run: npm run check
+
+      - name: Tests automatisés
+        run: npm test

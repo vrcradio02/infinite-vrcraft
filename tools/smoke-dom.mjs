@@ -18,6 +18,7 @@ import { dirname, join } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const erreurs = [];
+const EMOJI = /\p{Extended_Pictographic}/u;
 
 /* ---------------- DOM minimal ---------------- */
 class ClassList {
@@ -87,7 +88,11 @@ const document = {
   body: new Noeud('body'),
   createElement: (t) => new Noeud(t),
   createTextNode: (t) => { const n = new Noeud('#text'); n.textContent = t; return n; },
-  querySelector: (sel) => noeudPour(sel),
+  // Comme un vrai navigateur : un sélecteur non textuel doit échouer, pas passer inaperçu.
+  querySelector: (sel) => {
+    if (typeof sel !== 'string') throw new TypeError(`sélecteur invalide (chaîne attendue) : ${sel}`);
+    return noeudPour(sel);
+  },
   querySelectorAll: () => [],
   addEventListener() {},
   getElementById: (id) => noeudPour('#' + id),
@@ -95,6 +100,8 @@ const document = {
 
 /* ---------------- Globals navigateur ---------------- */
 const memoire = new Map();
+// Le vrai DOM expose `Node` : `el()` teste `child instanceof Node`.
+globalThis.Node = Noeud;
 globalThis.document = document;
 globalThis.window = globalThis;
 // Node >= 21 expose un `navigator` en lecture seule : on le remplace proprement.
@@ -159,6 +166,34 @@ try {
     console.log(`Catalogue : ${jeu.store.nombreRecettes} recettes officielles, ${jeu.store.nombreElements} éléments.`);
     console.log(`Familiers définis : ${jeu.pets.length} · mondes : ${jeu.mondes.length} · collections : ${jeu.collections.length}`);
     console.log(`Écrans rendus sans erreur · démarrage ${document.documentElement.lang === 'fr' ? 'en français' : 'langue inconnue'}.`);
+
+    /* --- L'écran de chargement doit réellement disparaître (bug corrigé) --- */
+    const boot = document.querySelector('#boot');
+    const app = document.querySelector('#app');
+    if (boot.hidden !== true) erreurs.push("L'écran de chargement n'est pas masqué (attribut hidden).");
+    if (boot.style.display !== 'none') erreurs.push("L'écran de chargement n'est pas masqué (display).");
+    if (app.hidden !== false) erreurs.push("L'application n'a pas été affichée (#app reste hidden).");
+
+    /* --- Chaque écran doit rendre son contenu (bug corrigé : vues.rendre jamais appelé) --- */
+    const { allerA } = globalThis.__icu;
+    await jeu.creer(0, 'Fumée', '🧪');
+    const cibles = {
+      accueil: '#home-status-list', inventaire: '#inv-grid', encyclopedie: '#enc-list',
+      quetes: '#quests-body', mondes: '#worlds-body', familiers: '#pets-body',
+      historique: '#hist-body', sauvegardes: '#saves-body', parametres: '#settings-body', profil: '#profile-body',
+    };
+    for (const [ecran, sel] of Object.entries(cibles)) {
+      allerA(ecran);
+      await new Promise((r) => setTimeout(r, 30));
+      const zone = document.querySelector(sel);
+      if (!zone) erreurs.push(`Écran « ${ecran} » : zone ${sel} introuvable.`);
+      else if (!zone.children.length) erreurs.push(`Écran « ${ecran} » vide : ${sel} n'a rien reçu après navigation.`);
+    }
+    console.log(`Écrans rendus : ${Object.keys(cibles).length} vérifiés non vides.`);
+
+    /* --- Les emoji doivent être présents jusque dans le texte rendu --- */
+    const texteAccueil = document.querySelector('#home-status-list').textContent;
+    if (!EMOJI.test(texteAccueil)) erreurs.push("Aucun emoji dans l'état du jeu rendu (#home-status-list).");
   }
 } catch (e) {
   erreurs.push(`Échec du chargement de main.js : ${e.stack || e}`);

@@ -10,7 +10,8 @@
  *  - "nouveau"       : recette officielle trouvée, jamais découverte dans cette partie
  *  - "connu"         : recette officielle trouvée, déjà découverte dans cette partie
  *  - "experimental"  : pas de recette officielle, résultat produit par le composeur local
- *                      déterministe (mode Créativité) — clairement distingué de l'officiel
+ *                      déterministe (mode Créativité). Le jeu l'enregistre aussitôt comme
+ *                      élément officiel de la partie (création du joueur, voir game.js).
  *  - "inconnu"       : aucun résultat (mode Catalogue sans recette)
  */
 import { pairKey } from './normalize.js';
@@ -44,9 +45,11 @@ export class FusionEngine {
    * @param {string} params.b identifiant du second élément
    * @param {(id:string)=>boolean} [params.dejaDecouvert]
    * @param {'catalogue'|'creativite'} [params.mode]
+   * @param {(a:string,b:string)=>object|null} [params.creation] recherche d'une création
+   *   déjà enregistrée par le joueur pour cette paire (elle est alors reproductible).
    * @returns {{statut:string, recette:object|null, resultat:object|null, raison?:string}}
    */
-  resoudre({ a, b, dejaDecouvert = () => false, mode = 'catalogue' }) {
+  resoudre({ a, b, dejaDecouvert = () => false, mode = 'catalogue', creation = null }) {
     if (!a || !b) {
       return { statut: STATUT.INCONNU, recette: null, resultat: null, raison: 'Ingrédients manquants.' };
     }
@@ -67,6 +70,22 @@ export class FusionEngine {
       };
     }
 
+    // Création déjà enregistrée par le joueur : elle est reproductible depuis son
+    // catalogue (même paire => même élément), sans repasser par le composeur.
+    const existante = typeof creation === 'function' ? creation(a, b) : null;
+    if (existante && this.store.elements.has(existante.id)) {
+      const meta = this.store.elements.get(existante.id);
+      return {
+        statut: dejaDecouvert(meta.id) ? STATUT.CONNU : STATUT.NOUVEAU,
+        recette: {
+          a, b, result: meta.id, categorie: meta.categorie, rarete: meta.rarete,
+          monde: meta.monde, source: 'creation', key: null,
+        },
+        resultat: { ...meta, experimental: false, creation: true },
+        depuisCreation: true,
+      };
+    }
+
     if (mode === 'creativite') {
       const resultat = this.composerExperimental(a, b);
       return { statut: STATUT.EXPERIMENTAL, recette: null, resultat };
@@ -81,9 +100,11 @@ export class FusionEngine {
   }
 
   /**
-   * Composeur expérimental LOCAL : déterministe et reproductible.
-   * Le même couple d'ingrédients donne toujours le même nom (règle B.2).
-   * Le résultat est marqué `experimental: true` et ne compte jamais comme découverte officielle.
+   * Composeur LOCAL : déterministe et reproductible.
+   * Le même couple d'ingrédients donne toujours exactement le même élément (règle B.2),
+   * ce qui rend la création enregistrable puis reproductible.
+   * Le résultat retourné ici porte `creation: true` : c'est `game.js` qui l'enregistre
+   * ensuite comme élément officiel de la partie (inventaire, encyclopédie, fusions).
    */
   composerExperimental(a, b) {
     // On canonicalise l'ORDRE avant de composer : A + B et B + A doivent produire
@@ -118,9 +139,10 @@ export class FusionEngine {
       categorie,
       rarete,
       monde: ea.monde || eb.monde || 'libre',
-      description: `Création expérimentale issue de « ${ea.nom} » et « ${eb.nom} ». Non officielle.`,
+      description: `Création issue de « ${ea.nom} » et « ${eb.nom} », enregistrée dans votre catalogue.`,
       emoji: '✨',
       experimental: true,
+      creation: true,
     };
   }
 }

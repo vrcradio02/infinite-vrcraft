@@ -1,3 +1,5 @@
+const VERSION = 'v4';
+const CACHE = `icu-${VERSION}`;
 /**
  * Service worker : mode hors ligne ET mises à jour fiables.
  *
@@ -8,20 +10,10 @@
  *  - Données JSON : réseau d'abord (pour recevoir les mises à jour), repli sur le cache.
  *  - Le nom du cache contient une VERSION : à l'activation, les anciens caches sont supprimés.
  *
- * Pourquoi cette réécriture ? La version précédente servait TOUTE la coquille
- * « cache d'abord » avec un nom de cache figé (`icu-v1`). Un visiteur ayant chargé
- * une version boguée (l'écran de chargement ne disparaissait jamais) restait donc
- * bloqué sur cette version **même après correction et republication** : le service
- * worker ne retéléchargeait jamais `index.html` ni `src/main.js`. Pire, comme le
- * script `sw.js` lui-même n'avait pas changé, aucune mise à jour n'était détectée.
- *
  * IMPORTANT : modifier un fichier de la coquille (JS, CSS, HTML) sans changer
  * `VERSION` empêcherait l'activation de vider l'ancien cache. Augmentez `VERSION`
  * à chaque publication qui modifie la coquille.
  */
-const VERSION = 'v3';
-const CACHE = `icu-${VERSION}`;
-
 const COQUILLE = [
   './',
   './index.html',

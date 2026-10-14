@@ -229,51 +229,44 @@ async function fusionner(a, b) {
   const r = await jeu.fusionner(a, b);
   if (!r.ok) {
     if (r.statut === STATUT.INCONNU) {
-      const paire = [a, b];
-      const contenu = el('div', {}, [
-        el('p', { text: r.raison || 'Aucune recette officielle pour cette paire.' }),
-        el('p', { class: 'muted', text: 'Vous pouvez tester le mode Créativité (proposition expérimentale locale ou service IA facultatif).' }),
-      ]);
-      ouvrirModale({
-        titre: '🚫 Pas de recette connue',
-        contenu,
-        actions: [
-          { label: 'Fermer' },
-          { label: 'Essayer en Créativité', variant: 'primary', action: async () => {
-            const res = await jeu.fusionIA(paire[0], paire[1]);
-            if (res.ok) { plateau.ajouterElement(res.resultat.id); afficherResultat(res.resultat, 'experimental'); }
-            else toast(res.erreur, 'bad');
-          } },
-        ],
-      });
+      // Fusion fluide : AUCUNE question posée, aucune fenêtre bloquante. On indique
+      // simplement la piste du mode Créativité.
+      toast('🔎 Aucune recette connue pour cette paire. Activez le mode Créativité (⚙️ Paramètres) pour inventer un nouvel élément.', 'warn', 6000);
       jouer('erreur', jeu.save.parametres);
     }
     return;
   }
+  if (r.avertissement) toast(`🤖 ${r.avertissement}`, 'info', 7000);
   plateau.ajouterElement(r.resultat.id);
   plateau.rendre();
-  if (r.statut === STATUT.EXPERIMENTAL) afficherResultat(r.resultat, 'experimental');
 }
 
-function afficherResultat(resultat, statut) {
+/** Fenêtre de découverte d'une recette OFFICIELLE du catalogue. */
+function afficherResultat(resultat) {
   const rarete = resultat.rarete || 'Commun';
   const contenu = el('div', { class: 'discovery' }, [
     el('div', { class: 'emoji', 'aria-hidden': 'true', text: resultat.emoji || '✨' }),
     el('div', { class: 'name', text: resultat.nom }),
     el('span', { class: `badge rare-${String(rarete).replace(/\s+/g, '-')}`, text: `${rarete} · ${resultat.categorie || ''}` }),
     el('p', { class: 'muted', text: resultat.description || '' }),
-    statut === 'experimental'
-      ? el('p', { class: 'warn', text: 'Création EXPÉRIMENTALE : elle ne compte pas comme recette officielle.' })
-      : el('p', { class: 'good', text: 'Nouvelle découverte enregistrée !' }),
+    el('p', { class: 'good', text: 'Nouvelle découverte enregistrée !' }),
   ]);
   ouvrirModale({
-    titre: statut === 'experimental' ? '🧬 Création expérimentale' : '🎉 Nouvelle découverte !',
+    titre: '🎉 Nouvelle découverte !',
     contenu,
     actions: [
       { label: 'Fermer' },
       { label: 'Partager', action: () => { partagerResultat(resultat); return false; } },
     ],
   });
+}
+
+/**
+ * Annonce d'une CRÉATION (mode Créativité) : elle est enregistrée comme élément
+ * officiel de la partie et rejoint l'inventaire, sans interrompre la partie.
+ */
+function annoncerCreation(resultat) {
+  toast(`🧬 1ʳᵉ découverte : ${resultat.emoji || '✨'} ${resultat.nom} — enregistré comme élément officiel et ajouté à l'inventaire.`, 'good', 8000);
 }
 
 async function partagerResultat(resultat) {
@@ -289,10 +282,13 @@ async function partagerResultat(resultat) {
 /* -------------------- Événements -------------------- */
 
 function abonnerEvenements() {
-  on(EV.DECOUVERTE, ({ resultat }) => {
+  on(EV.DECOUVERTE, ({ resultat, creation }) => {
     const rare = ['Légendaire', 'Mythique', 'Cosmique', 'Secret'].includes(resultat.rarete);
     jouer(rare ? 'rare' : 'decouverte', jeu.save?.parametres);
-    afficherResultat(resultat, 'nouveau');
+    // Une création est annoncée par un message discret : pas de fenêtre à fermer,
+    // la partie reste fluide (elle est déjà dans l'inventaire).
+    if (creation) annoncerCreation(resultat);
+    else afficherResultat(resultat);
     vues.majTopbar();
   });
 

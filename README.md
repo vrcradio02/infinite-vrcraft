@@ -49,7 +49,7 @@ le projet reste sans dépendance.
 |---|---|
 | `npm start` | Sert le jeu en local (`tools/serve.mjs`). |
 | `npm test` | Tests automatisés (unitaires + intégration). |
-| `npm run build` | Recompile `data/registre-fusions.json` depuis les lots. |
+| `npm run build` | Recompile `data/registre-fusions.json` depuis les lots (déterministe). |
 | `npm run validate` | Valide le registre (doublons, ingrédients, accessibilité). |
 | `npm run generate -- --count 500` | Génère un **lot candidat** de recettes (jamais officiel d'office). |
 | `npm run check:modules` | Vérifie que tous les modules et imports se chargent. |
@@ -63,8 +63,9 @@ Ordre recommandé pour toute modification de données :
 npm run build && npm run validate && npm test && npm run check
 ```
 
-Les tests de données (`tests/data.test.mjs`) et le validateur lisent le **registre compilé** :
-lancez `npm run build` au moins une fois avant `npm test`.
+Le registre officiel est **versionné** : après une modification des recettes, relancez `npm run build`
+puis committez `data/registre-fusions.json`. La compilation est **déterministe** (aucun horodatage),
+donc sans changement de données elle ne produit aucun diff.
 
 ---
 
@@ -115,9 +116,9 @@ infinite-vrcraft/
 │   └── styles/main.css            Thèmes et mise en page responsive
 ├── data/
 │   ├── elements.json              Catalogue d'éléments (format compact commenté)
-│   ├── registre-fusions.json      Registre officiel COMPILÉ — artefact de build (npm run build)
+│   ├── registre-fusions.json      Registre officiel VERSIONNÉ (42 Ko, généré par npm run build)
 │   ├── fusions/index.json         Liste des lots chargés par le jeu
-│   ├── fusions/lot-*.json         Recettes par monde (8 lots) — la source versionnée
+│   ├── fusions/lot-*.json         Recettes par monde (8 lots) — la source à éditer
 │   ├── pets.json                  10 familiers
 │   ├── quests.json                Quêtes et scénarios
 │   ├── mondes.json                8 mondes + conditions de déblocage
@@ -125,7 +126,7 @@ infinite-vrcraft/
 ├── server/worker-exemple.js       Proxy IA sécurisé (exemple, facultatif)
 ├── tools/
 │   ├── serve.mjs                  Serveur statique
-│   ├── build-registry.mjs         Compile les lots → registre
+│   ├── build-registry.mjs         Compile les lots → registre (déterministe, minifié)
 │   ├── validate-registry.mjs      Valide le registre
 │   ├── generate-recipes.mjs       Générateur de lots candidats
 │   ├── check-modules.mjs          Vérifie les imports
@@ -145,11 +146,11 @@ infinite-vrcraft/
   forcer `ordered: true` pour documenter une exception.
 - Recherche en O(1) grâce à un index `clé de paire → recette`.
 - Quatre statuts possibles : `nouveau`, `connu`, `experimental`, `inconnu`.
-- **Chargement progressif** : le registre de base est chargé au démarrage, et des lots
-  supplémentaires peuvent être chargés à la demande (`RecipeStore.chargerLot()`), ce qui permet
-  de garder un démarrage rapide même avec un catalogue très volumineux.
-- **Deux voies de chargement équivalentes** : le registre compilé s'il existe, sinon directement
-  les sources versionnées (`data/elements.json` + `data/fusions/index.json` + `data/fusions/lot-*.json`).
+- **Chargement progressif** : le registre est chargé au démarrage, et des lots supplémentaires
+  peuvent être chargés à la demande (`RecipeStore.chargerLot()`), ce qui permet de garder un
+  démarrage rapide même avec un catalogue très volumineux.
+- **Deux voies de chargement équivalentes** : le registre compilé, sinon directement les sources
+  versionnées (`data/elements.json` + `data/fusions/index.json` + `data/fusions/lot-*.json`).
   Un test d'intégration vérifie que les deux voies produisent **exactement le même catalogue**.
 
 ### 4.2 Deux modes
@@ -185,8 +186,7 @@ infinite-vrcraft/
 
 ## 5. Publier sur GitHub Pages
 
-Le dépôt **est** le site : aucun build n'est nécessaire pour publier, car le jeu charge
-les sources versionnées (`data/elements.json` + lots).
+Le dépôt **est** le site : aucun build n'est nécessaire pour publier.
 
 1. Poussez le dépôt sur GitHub (branche `main`).
 2. Sur GitHub : **Settings → Pages**.
@@ -200,11 +200,11 @@ Notes importantes :
 - Le fichier `.nojekyll` est présent : il empêche Jekyll d'ignorer certains fichiers.
 - Tous les chemins sont **relatifs** (`./`), ce qui fonctionne dans un sous-dossier de projet.
 - Le service worker exige **HTTPS** : GitHub Pages le fournit automatiquement.
-- Si vous modifiez des recettes, relancez `npm run build` **avant** de committer, afin que
-  `data/registre-fusions.json` soit à jour. Ce fichier est un **artefact de build** : il n'est pas
-  versionné. Le jeu sait aussi charger directement les sources versionnées
-  (`data/elements.json` + `data/fusions/index.json` + `data/fusions/lot-*.json`),
-  donc GitHub Pages fonctionne même sans lancer la compilation.
+- `data/registre-fusions.json` est **versionné** (registre officiel compilé, minifié pour le
+  téléchargement). Après une modification des recettes : `npm run build`, puis committez le fichier.
+  La compilation est déterministe. Si le fichier est absent, le jeu charge directement les sources
+  versionnées (`data/elements.json` + `data/fusions/index.json` + lots) — les deux voies donnent
+  le même catalogue, ce qu'un test d'intégration vérifie.
 
 ### Vérification automatique (facultative)
 
@@ -314,6 +314,7 @@ officielles : la promotion en officiel reste une décision humaine (relisez, pui
 - [x] Internationalisation prête (français par défaut, anglais inclus)
 - [x] Statistiques complètes, partage de découverte (copie dans le presse-papiers)
 - [x] Classements **locaux** entre les 3 emplacements (aucun faux classement en ligne)
+- [x] Registre officiel **versionné** (42 Ko), compilation déterministe
 - [x] Outils : compilateur, validateur, générateur de lots, vérificateur d'imports, test de fumée
 - [x] **93 tests automatisés** (unitaires + intégration du vrai contrôleur)
 
@@ -364,7 +365,8 @@ Méthode de calcul :
    (`tools/rapport-registre.json` liste chaque rejet).
 3. Il **déduplique par paire canonique** : une paire `(A, B)` ne peut avoir qu'une seule recette.
    Les doublons sont comptés séparément, jamais additionnés au total.
-4. Il écrit `data/registre-fusions.json` avec un identifiant stable par recette.
+4. Il écrit `data/registre-fusions.json` (versionné, minifié, sans horodatage) avec un identifiant
+   stable par recette.
 5. Le compteur affiché par le jeu est exactement le nombre de recettes réellement indexées après
    rejet et déduplication (registre compilé, ou index reconstruit depuis les sources :
    un test d'intégration vérifie que **les deux voies produisent le même catalogue**).

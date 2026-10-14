@@ -19,6 +19,14 @@
     <p class="boot-sub"><span aria-hidden="true">📚</span> <span data-i18n="boot.loading">Chargement du catalogue…</span></p>
     <p class="muted">🔥 💧 🌍 💨</p>
     <div class="boot-bar"><span id="boot-bar-fill"></span></div>
+    <p class="muted boot-version" id="boot-version"></p>
+
+    <!-- Actions de secours : affichées uniquement si le chargement échoue ou dure trop longtemps. -->
+    <div class="boot-actions" id="boot-actions" hidden>
+      <button class="btn btn-primary" id="btn-boot-reload" type="button">🔄 Recharger</button>
+      <button class="btn" id="btn-boot-reset" type="button">🧹 Vider le cache et recharger</button>
+    </div>
+
     <noscript>
       <p class="error">⚠️ Ce jeu nécessite JavaScript pour fonctionner.</p>
     </noscript>
@@ -246,6 +254,7 @@
           <p><b>✨ Infinite Craft Ultimate</b> — jeu de fusion original, jouable hors ligne, sans compte.</p>
           <p>🎨 Nom provisoire, logo, couleurs et thèmes modifiables (voir <code>src/config.js</code> et <code>src/styles/main.css</code>).</p>
           <p>📜 Code sous licence MIT. Aucune clé d'API n'est intégrée au navigateur. 🔒</p>
+          <p>🏷️ Version de l'application : <span id="app-version" class="mono">—</span></p>
           <p>🐙 <a href="https://github.com/vrcradio02/infinite-vrcraft" target="_blank" rel="noopener noreferrer">Dépôt GitHub</a></p>
         </div>
       </section>

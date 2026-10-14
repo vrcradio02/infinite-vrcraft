@@ -52,6 +52,7 @@
         <li><button class="nav-btn" data-screen="quetes">📜 <span data-i18n="nav.quetes">Quêtes</span></button></li>
         <li><button class="nav-btn" data-screen="mondes">🗺️ <span data-i18n="nav.mondes">Mondes</span></button></li>
         <li><button class="nav-btn" data-screen="familiers">🐾 <span data-i18n="nav.familiers">Familiers</span></button></li>
+        <li><button class="nav-btn" data-screen="amis">👥 <span data-i18n="nav.amis">Amis</span></button></li>
         <li><button class="nav-btn" data-screen="historique">🕘 <span data-i18n="nav.historique">Historique</span></button></li>
         <li><button class="nav-btn" data-screen="sauvegardes">💾 <span data-i18n="nav.sauvegardes">Sauvegardes</span></button></li>
         <li><button class="nav-btn" data-screen="parametres">⚙️ <span data-i18n="nav.parametres">Paramètres</span></button></li>
@@ -78,6 +79,7 @@
           <button class="card action-card" data-action="quetes"><span class="big">📜</span><b data-i18n="home.quests">Quêtes</b><small data-i18n="home.quests.sub">Objectifs et défis</small></button>
           <button class="card action-card" data-action="encyclopedie"><span class="big">📖</span><b data-i18n="home.collection">Collection</b><small data-i18n="home.collection.sub">Vos découvertes</small></button>
           <button class="card action-card" data-action="familiers"><span class="big">🐾</span><b data-i18n="home.pets">Animaux</b><small data-i18n="home.pets.sub">Familiers et aides</small></button>
+          <button class="card action-card" data-action="amis"><span class="big">👥</span><b data-i18n="home.friends">Amis</b><small data-i18n="home.friends.sub">Ajouter un joueur (+10 potions)</small></button>
           <button class="card action-card" data-action="parametres"><span class="big">⚙️</span><b data-i18n="home.settings">Paramètres</b><small data-i18n="home.settings.sub">Thème, sons, accessibilité</small></button>
           <button class="card action-card" data-action="tutoriel"><span class="big">🎓</span><b data-i18n="home.tuto">Tutoriel</b><small data-i18n="home.tuto.sub">Apprendre à fusionner</small></button>
         </div>
@@ -190,6 +192,23 @@
         <div id="pets-team" class="grid grid-auto"></div>
       </section>
 
+      <!-- AMIS -->
+      <section class="screen" id="screen-amis" data-screen="amis" hidden>
+        <h2>👥 <span data-i18n="friends.title">Amis</span></h2>
+        <p class="muted" data-i18n="friends.sub">Entrez le pseudonyme d'un joueur : il reçoit une notification « voulez-vous l'ajouter dans vos amis ? ». Chaque ami accepté rapporte 10 potions.</p>
+        <div class="card" id="friends-card"></div>
+        <h3>📨 <span data-i18n="friends.inbox">Demandes à valider</span></h3>
+        <div id="friends-inbox" class="grid grid-auto"></div>
+        <h3>⏳ <span data-i18n="friends.sent">Demandes envoyées</span></h3>
+        <div id="friends-sent" class="grid grid-auto"></div>
+        <h3>🫂 <span data-i18n="friends.list">Ma liste d'amis</span></h3>
+        <div id="friends-list" class="grid grid-auto"></div>
+        <h3>🪪 <span data-i18n="friends.profile">Profils partagés</span></h3>
+        <div class="card" id="friends-profil"></div>
+        <h3>🎟️ <span data-i18n="friends.code">Code d'invitation (sans serveur)</span></h3>
+        <div class="card" id="friends-code"></div>
+      </section>
+
       <!-- HISTORIQUE -->
       <section class="screen" id="screen-historique" data-screen="historique" hidden>
         <h2>🕘 <span data-i18n="nav.historique">Historique</span></h2>
@@ -240,6 +259,8 @@
         <div class="card" id="settings-body"></div>
         <h3>🤖 <span data-i18n="settings.ai">Service IA facultatif</span></h3>
         <div class="card" id="settings-ai"></div>
+        <h3>👥 <span data-i18n="settings.friends">Relais d'amis facultatif</span></h3>
+        <div class="card" id="settings-amis"></div>
       </section>
 
       <!-- PROFIL -->

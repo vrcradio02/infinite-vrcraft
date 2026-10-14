@@ -11,6 +11,8 @@ import { etatCollections } from '../game/collections.js';
 import { descriptionCondition } from '../game/mondes.js';
 import { xpFamilerPourNiveau, niveauFamilier } from '../pets/pets.js';
 import { formatDuree } from '../game/game.js';
+import { POINTS_PAR_AMI } from '../social/friends.js';
+import { dateApercu, resumeProfil } from '../social/profil.js';
 
 const RARE_SLUG = (r) => 'rare-' + String(r).replace(/\s+/g, '-');
 
@@ -33,6 +35,7 @@ export class Vues {
       case 'quetes': return this.quetes();
       case 'mondes': return this.mondes();
       case 'familiers': return this.familiers();
+      case 'amis': return this.amis();
       case 'historique': return this.historique();
       case 'sauvegardes': return this.sauvegardes();
       case 'parametres': return this.parametres();
@@ -84,6 +87,7 @@ export class Vues {
       el('span', {}, ['🏅 Niv. ', el('b', { text: String(st.niveau) }), ` · ${st.titre}`]),
       el('span', {}, ['🔬 Découvertes ', el('b', { text: String(st.decouvertes) }), `/ ${st.totalElements}`]),
       el('span', {}, ['✨ XP ', el('b', { text: String(st.xp) })]),
+      el('span', {}, ['👥 Amis ', el('b', { text: String(st.amis || 0) }), st.amisEnAttente ? ` (+${st.amisEnAttente} à valider)` : '']),
     );
   }
 
@@ -665,6 +669,405 @@ export class Vues {
     };
   }
 
+  /* ===================== AMIS ===================== */
+
+  /**
+   * Écran Amis : ajout par pseudonyme, demandes à valider, liste et code d'invitation.
+   * Chaque ami accepté rapporte `POINTS_PAR_AMI` potions (une seule fois par personne).
+   */
+  amis() {
+    const etat = this.jeu.etatAmis();
+    const carte = $('#friends-card');
+    clear(carte);
+
+    // --- Bandeau d'état : identifiant public, relais, récompense ---
+    carte.append(el('div', { class: 'title' }, [
+      el('span', { 'aria-hidden': 'true', text: '🪪' }),
+      el('span', { text: `Votre identifiant : ${etat.identifiant}` }),
+    ]));
+    carte.append(el('p', { class: 'muted', text: `Aucun compte, aucun e-mail : votre identifiant est dérivé de votre pseudonyme. Chaque ami accepté rapporte ${POINTS_PAR_AMI} potions 🧪 (une seule fois par ami).` }));
+    carte.append(el('p', { class: 'muted', text: etat.relais
+      ? '📡 Relais d’amis configuré : la notification part directement chez l’autre joueur.'
+      : '🎟️ Aucun relais configuré : la demande est livrée par un code d’invitation à transmettre à votre ami (Paramètres → Relais d’amis pour l’envoi direct).' }));
+    carte.append(el('p', { class: 'meta', text: `👥 ${etat.resume.total} ami(s) · 📨 ${etat.resume.recues} demande(s) à valider · ⏳ ${etat.resume.envoyees} envoyée(s) · 🧪 ${etat.resume.potionsGagnees} potions gagnées grâce aux amis.` }));
+
+    // --- Formulaire : on tape le pseudonyme de l'ami ---
+    const champ = el('input', { class: 'input', type: 'text', maxlength: 24, placeholder: '👤 Pseudonyme de votre ami', value: '' });
+    const envoyer = el('button', { class: 'btn btn-primary' }, ['📨 Envoyer la demande d’ami']);
+    envoyer.addEventListener('click', () => this._demanderAmi(champ.value));
+    champ.addEventListener('keydown', (e) => { if (e.key === 'Enter') this._demanderAmi(champ.value); });
+    carte.append(el('div', { class: 'row' }, [champ, envoyer]));
+
+    // --- Demandes reçues : la notification « voulez-vous l'ajouter dans vos amis ? » ---
+    const inbox = $('#friends-inbox');
+    clear(inbox);
+    if (!etat.recues.length) inbox.append(el('p', { class: 'muted', text: '📭 Aucune demande en attente.' }));
+    for (const d of etat.recues) {
+      inbox.append(el('div', { class: 'item quest' }, [
+        el('div', { class: 'title' }, [el('span', { 'aria-hidden': 'true', text: d.avatar || '🧪' }), el('span', { text: `${d.nom} veut vous ajouter dans vos amis` })]),
+        el('span', { class: 'meta', text: `Reçue le ${new Date(d.date).toLocaleDateString('fr-FR')}` }),
+        el('div', { class: 'row' }, [
+          el('button', { class: 'btn btn-sm btn-primary', onClick: () => this._accepterAmi(d.id) }, [`✅ Accepter (+${POINTS_PAR_AMI} 🧪)`]),
+          el('button', { class: 'btn btn-sm', onClick: () => { this.jeu.refuserAmi(d.id); toast('Demande refusée.', 'warn'); this.amis(); this.majTopbar(); } }, ['❌ Refuser']),
+        ]),
+      ]));
+    }
+
+    // --- Demandes envoyées (annulables) ---
+    const envoyees = $('#friends-sent');
+    clear(envoyees);
+    if (!etat.envoyees.length) envoyees.append(el('p', { class: 'muted', text: '✉️ Aucune demande envoyée en attente.' }));
+    for (const d of etat.envoyees) {
+      envoyees.append(el('div', { class: 'item' }, [
+        el('div', { class: 'title' }, [el('span', { 'aria-hidden': 'true', text: '⏳' }), el('span', { text: d.nom })]),
+        el('span', { class: 'meta', text: 'En attente d’acceptation.' }),
+        el('button', { class: 'btn btn-sm', onClick: () => { this.jeu.annulerDemandeAmi(d.id); toast('Demande annulée.', 'info'); this.amis(); } }, ['✖️ Annuler']),
+      ]));
+    }
+
+    // --- Liste d'amis : chacun avec son profil consultable ---
+    const profils = this.jeu.profilsAmis();
+    const mien = resumeProfil(this.jeu.monProfil());
+    const liste = $('#friends-list');
+    clear(liste);
+    if (!etat.liste.length) liste.append(el('p', { class: 'muted', text: '🫂 Aucun ami pour le moment. Ajoutez-en un avec son pseudonyme.' }));
+    if (etat.liste.length) {
+      const tout = el('button', { class: 'btn btn-sm' }, ['🔄 Tout rafraîchir']);
+      tout.addEventListener('click', () => this._rafraichirTous());
+      liste.append(el('div', { class: 'row' }, [tout]));
+    }
+    for (const a of etat.liste) {
+      const p = profils[a.id];
+      const resume = p ? resumeProfil(p) : null;
+      liste.append(el('div', { class: 'item' }, [
+        el('div', { class: 'title' }, [el('span', { 'aria-hidden': 'true', text: a.avatar || '🧪' }), el('span', { text: a.nom })]),
+        el('span', { class: 'meta', text: `Ami depuis le ${new Date(a.date).toLocaleDateString('fr-FR')} · +${POINTS_PAR_AMI} 🧪 déjà versées` }),
+        el('span', { class: 'meta', text: resume
+          ? `⭐ Niveau ${resume.niveau} · 📦 ${resume.objets} objets · 💎 ${resume.objetsRares} objets rares · 🐾 ${resume.animaux} animaux · 🔬 ${resume.decouvertes} découvertes`
+          : '👀 Aucun aperçu de son profil pour le moment (relais ou code de profil).' }),
+        el('span', { class: 'meta', text: resume
+          ? `⚖️ Vous : 📦 ${mien.objets} objets · 🐾 ${mien.animaux} animaux · ⭐ Niveau ${mien.niveau} · aperçu du ${dateApercu(p.recuLe)}`
+          : '🎟️ Demandez-lui son code de profil (ou activez le relais) pour recevoir son aperçu : niveau, objets, animaux et statistiques.' }),
+        el('div', { class: 'row' }, [
+          el('button', { class: 'btn btn-sm btn-primary', onClick: () => this.voirProfilAmi(a.id) }, ['👁️ Voir le profil']),
+          el('button', { class: 'btn btn-sm', onClick: () => this._rafraichirProfil(a.id) }, ['🔄 Rafraîchir']),
+          el('button', { class: 'btn btn-sm', onClick: () => { this.jeu.retirerAmi(a.id); toast(`${a.nom} retiré de vos amis.`, 'info'); this.amis(); this.majTopbar(); } }, ['✖️ Retirer']),
+        ]),
+      ]));
+    }
+
+    // --- Profils partagés : le mien + import du code d'un ami ---
+    this._carteProfils();
+
+    // --- Code d'invitation (mode sans relais) ---
+    const zone = $('#friends-code');
+    clear(zone);
+    const champCode = el('input', { class: 'input', type: 'text', placeholder: '🎟️ Collez ici un code reçu', value: '' });
+    const valider = el('button', { class: 'btn' }, ['✅ Ajouter depuis ce code']);
+    valider.addEventListener('click', () => this._traiterCodeAmi(champCode.value));
+    zone.append(
+      el('p', { class: 'muted', text: 'Un code remplace le relais : envoyez-le à votre ami par le moyen de votre choix (message, réseau social…), il le colle ici et reçoit la notification.' }),
+      el('div', { class: 'row' }, [champCode, valider]),
+    );
+  }
+
+  /**
+   * Carte « profils partagés » : mon aperçu, sa mise en ligne (relais) ou son code,
+   * et l'import du profil d'un ami sans relais.
+   */
+  _carteProfils() {
+    const zone = $('#friends-profil');
+    clear(zone);
+    if (!this.save) return;
+    const mon = this.jeu.monProfil();
+    const relais = this.jeu.etatAmis().relais;
+
+    zone.append(el('p', { class: 'muted', text: 'Vos amis peuvent consulter un aperçu de votre partie (niveau, découvertes, familiers, statistiques). Ni votre sauvegarde ni vos recettes complètes ne quittent votre appareil.' }));
+    if (mon) {
+      zone.append(el('p', { class: 'meta', text: `🪪 ${mon.avatar} ${mon.nom} — ⭐ Niveau ${mon.progression.niveau} · 🔬 ${mon.decouvertes.total} découvertes · 🐾 ${mon.familiers.total} familiers · 🗺️ ${mon.mondes.total} mondes · 🧪 ${mon.stats.potions} potions` }));
+    }
+
+    const copier = el('button', { class: 'btn btn-sm' }, ['📋 Copier mon profil (code)']);
+    copier.addEventListener('click', async () => {
+      const r = this.jeu.codeProfil();
+      if (!r.ok) { toast(r.erreur, 'warn'); return; }
+      this._afficherCode('🪪 Mon profil de joueur', 'Envoyez ce code à un ami : il le colle dans « Profils partagés » et voit vos statistiques, vos découvertes et vos familiers.', r.code);
+    });
+    const publier = el('button', { class: 'btn btn-sm btn-primary' }, ['📡 Publier mon profil']);
+    publier.addEventListener('click', async () => {
+      publier.disabled = true;
+      const r = await this.jeu.publierProfil();
+      publier.disabled = false;
+      toast(r.ok ? '📡 Profil publié : vos amis peuvent le consulter.' : `📡 ${r.erreur}`, r.ok ? 'good' : 'warn', 7000);
+      this.amis();
+    });
+    const moi = el('button', { class: 'btn btn-sm' }, ['👁️ Voir mon profil partagé']);
+    moi.addEventListener('click', () => this._ouvrirProfil(mon, { moi: true }));
+
+    zone.append(el('div', { class: 'row' }, relais ? [publier, copier, moi] : [copier, moi]));
+    if (!relais) zone.append(el('p', { class: 'muted', text: '📡 Sans relais configuré (Paramètres → Relais d’amis), le profil se transmet par code.' }));
+
+    const champ = el('input', { class: 'input', type: 'text', placeholder: '🎟️ Collez ici le code de profil d’un ami', value: '' });
+    const importer = el('button', { class: 'btn' }, ['✅ Voir ce profil']);
+    importer.addEventListener('click', () => {
+      const r = this.jeu.importerProfil(champ.value);
+      if (!r.ok) { toast(r.erreur, 'warn'); return; }
+      champ.value = '';
+      toast(`🪪 Profil de ${r.profil.nom} enregistré.`, 'good', 7000);
+      this.amis();
+      this._ouvrirProfil(this.jeu.profilAmi(r.profil.id));
+    });
+    zone.append(el('div', { class: 'row' }, [champ, importer]));
+  }
+
+  /** Rafraîchit les aperçus de TOUS les amis en un seul appel au relais. */
+  async _rafraichirTous() {
+    const r = await this.jeu.synchroniserProfils({ publier: false });
+    if (!r.ok) { toast(`📡 ${r.erreur}`, 'warn', 7000); return; }
+    this.amis();
+    toast(r.recus ? `🔄 ${r.recus} aperçu(s) d’ami mis à jour.` : '🔄 Aucun nouvel aperçu publié par vos amis.', r.recus ? 'good' : 'info', 6000);
+  }
+
+  /** Rafraîchit l'aperçu d'un ami par le relais (sans relais, on explique le code). */
+  async _rafraichirProfil(id) {
+    const r = await this.jeu.synchroniserProfils({ publier: false });
+    if (!r.ok) { toast(`📡 ${r.erreur}`, 'warn', 7000); return; }
+    this.amis();
+    const p = this.jeu.profilAmi(id);
+    toast(p ? `🔄 Aperçu de ${p.nom} mis à jour (${dateApercu(p.recuLe)}).` : 'Aucun profil publié par cet ami pour le moment.', p ? 'good' : 'info', 6000);
+  }
+
+  /** Ouvre la fiche de profil d'un ami (ou la mienne). */
+  voirProfilAmi(id) {
+    this._ouvrirProfil(this.jeu.profilAmi(id));
+  }
+
+  /** Compteurs lisibles d'un aperçu : objets, objets rares, animaux, mondes, succès… */
+  _compteursProfil(profil) {
+    const d = profil.decouvertes || {};
+    const sur = (n, total) => (total ? `${n} / ${total}` : String(n));
+    return [
+      ['📦 Objets', sur(d.total || 0, d.catalogue || 0)],
+      ['💎 Objets rares', String(d.totalRares || 0)],
+      ['🧬 Créations', String(d.creations || 0)],
+      ['🐾 Animaux', String(profil.familiers?.total || 0)],
+      ['🗺️ Mondes', sur(profil.mondes?.total || 0, profil.mondes?.referentiel || 0)],
+      ['🧩 Collections', sur(profil.collections?.completees || 0, profil.collections?.referentiel || 0)],
+      ['🏅 Succès', sur(profil.succes?.total || 0, profil.succes?.referentiel || 0)],
+    ];
+  }
+
+  /**
+   * Comparaison « vous / votre ami » ligne par ligne (objets, objets rares, animaux, niveau…).
+   * @returns {Array} lignes `<li>` prêtes à afficher
+   */
+  _comparerProfils(mien, sien) {
+    if (!mien || !sien) return [];
+    const lignes = [
+      ['📦 Objets', mien.decouvertes?.total || 0, sien.decouvertes?.total || 0],
+      ['💎 Objets rares', mien.decouvertes?.totalRares || 0, sien.decouvertes?.totalRares || 0],
+      ['🐾 Animaux', mien.familiers?.total || 0, sien.familiers?.total || 0],
+      ['⭐ Niveau', mien.progression?.niveau || 1, sien.progression?.niveau || 1],
+      ['🗺️ Mondes', mien.mondes?.total || 0, sien.mondes?.total || 0],
+      ['🧩 Collections', mien.collections?.completees || 0, sien.collections?.completees || 0],
+      ['🏅 Succès', mien.succes?.total || 0, sien.succes?.total || 0],
+    ];
+    return lignes.map(([libelle, a, b]) => {
+      const ecart = b - a;
+      const signe = ecart === 0 ? '⚖️ égalité' : ecart > 0 ? `🔺 +${ecart}` : `🔻 ${ecart}`;
+      return el('li', {}, [
+        el('span', { text: libelle }),
+        el('span', { text: `Vous ${a} · Lui ${b} (${signe})` }),
+      ]);
+    });
+  }
+
+  /**
+   * Fiche détaillée d'un aperçu : progression, objets (et leurs raretés), animaux,
+   * mondes, collections, succès, comparaison avec ma partie et statistiques.
+   * Aucun contenu n'est injecté en HTML.
+   */
+  _ouvrirProfil(profil, { moi = false } = {}) {
+    if (!profil) {
+      ouvrirModale({
+        titre: '🪪 Profil',
+        contenu: el('div', {}, [
+          el('p', { text: 'Aucun aperçu de ce joueur pour le moment.' }),
+          el('p', { class: 'muted', text: 'Demandez-lui de publier son profil (📡) ou de vous envoyer son code de profil, puis utilisez « 🔄 Rafraîchir » ou collez le code dans « Profils partagés ».' }),
+        ]),
+      });
+      return;
+    }
+
+    const d = profil.decouvertes || {};
+    const fam = profil.familiers || {};
+    const stats = profil.stats || {};
+    const mien = moi ? null : this.jeu.monProfil();
+    const contenu = el('div', {}, [
+      el('div', { class: 'card' }, [
+        el('h3', { text: `${profil.avatar || '🧪'} ${profil.nom}${moi ? ' (vous)' : ''}` }),
+        el('p', { class: 'muted', text: `🪪 ${profil.id} · aperçu ${moi ? 'de votre partie' : `reçu le ${dateApercu(profil.recuLe)} (${profil.source === 'relais' ? 'relais' : 'code'})`}` }),
+        el('p', { class: 'meta', text: `⭐ Niveau ${profil.progression.niveau} · ✨ ${profil.progression.xp} XP · 🧪 ${stats.potions || 0} potions` }),
+        el('ul', { class: 'kv' }, this._compteursProfil(profil).map(([libelle, valeur]) => el('li', {}, [
+          el('span', { text: libelle }),
+          el('span', { text: valeur }),
+        ]))),
+      ]),
+      el('div', { class: 'card' }, [
+        el('h3', { text: '🔬 Découvertes' }),
+        el('ul', { class: 'kv' }, [
+          el('li', {}, [el('span', { text: '🧪 Éléments trouvés' }), el('span', { text: d.catalogue ? `${d.total} / ${d.catalogue}` : String(d.total) })]),
+          el('li', {}, [el('span', { text: '💎 Objets rares (Rare et plus)' }), el('span', { text: String(d.totalRares || 0) })]),
+          el('li', {}, [el('span', { text: '🧬 Créations du joueur' }), el('span', { text: String(d.creations || 0) })]),
+          ...Object.entries(d.parRarete || {}).filter(([, n]) => n > 0).map(([r, n]) => el('li', {}, [el('span', { text: `💠 ${r}` }), el('span', { text: String(n) })])),
+        ]),
+        el('p', { class: 'muted', text: '🔎 Ses plus beaux objets :' }),
+        d.rares?.length
+          ? el('ul', { class: 'kv' }, (d.rares || []).map((x) => el('li', {}, [
+            el('span', { text: `${x.emoji} ${x.nom}` }),
+            el('span', { text: `${x.rarete} · ${dateApercu(x.date)}` }),
+          ])))
+          : el('p', { class: 'muted', text: '💤 Aucun objet rare pour le moment.' }),
+        d.dernieres?.length ? el('p', { class: 'muted', text: '🕒 Dernières découvertes :' }) : null,
+        el('ul', { class: 'kv' }, (d.dernieres || []).map((x) => el('li', {}, [
+          el('span', { text: `${x.emoji} ${x.nom}${x.source === 'creation' ? ' 🧬' : ''}` }),
+          el('span', { text: `${x.rarete} · ${dateApercu(x.date)}` }),
+        ]))),
+      ]),
+      el('div', { class: 'card' }, [
+        el('h3', { text: `🐾 Familiers (${fam.total || 0}) — ses animaux` }),
+        el('p', { class: 'meta', text: fam.equipe?.length
+          ? `🎽 Équipe active : ${fam.equipe.map((id) => { const f = (fam.liste || []).find((x) => x.id === id); return f ? `${f.emoji} ${f.nom}` : id; }).join(', ')}`
+          : '💤 Aucun animal dans son équipe active.' }),
+        fam.liste?.length
+          ? el('ul', { class: 'kv' }, (fam.liste || []).map((f) => el('li', {}, [
+            el('span', { text: `${f.emoji} ${f.nom}${f.equipe ? ' 🎽' : ''}` }),
+            el('span', { text: `${f.rarete || 'Commun'} · Niveau ${f.niveau}` }),
+          ])))
+          : el('p', { class: 'muted', text: '💤 Aucun animal connu pour le moment.' }),
+      ]),
+      mien ? el('div', { class: 'card' }, [
+        el('h3', { text: `⚖️ Vous et ${profil.nom}` }),
+        el('ul', { class: 'kv' }, this._comparerProfils(mien, profil)),
+      ]) : null,
+      el('div', { class: 'card' }, [
+        el('h3', { text: '🗺️ Progression' }),
+        el('ul', { class: 'kv' }, [
+          el('li', {}, [el('span', { text: '🗺️ Mondes débloqués' }), el('span', { text: `${profil.mondes.total}${profil.mondes.referentiel ? ` / ${profil.mondes.referentiel}` : ''}` })]),
+          el('li', {}, [el('span', { text: '🧩 Collections terminées' }), el('span', { text: `${profil.collections.completees}${profil.collections.referentiel ? ` / ${profil.collections.referentiel}` : ''}` })]),
+          el('li', {}, [el('span', { text: '🏅 Succès' }), el('span', { text: `${profil.succes.total}${profil.succes.referentiel ? ` / ${profil.succes.referentiel}` : ''}` })]),
+        ]),
+        el('ul', { class: 'kv' }, (profil.collections.liste || []).map((c) => el('li', {}, [
+          el('span', { text: `${c.emoji} ${c.nom}` }),
+          el('span', { text: c.complete ? '✅ terminée' : '⬜ en cours' }),
+        ]))),
+      ]),
+      el('div', { class: 'card' }, [
+        el('h3', { text: '📊 Statistiques' }),
+        el('ul', { class: 'kv' }, [
+          el('li', {}, [el('span', { text: '📦 Objets trouvés' }), el('span', { text: String(d.total || 0) })]),
+          el('li', {}, [el('span', { text: '🔮 Objets par jour de jeu' }), el('span', { text: (d.total / (stats.joursDeJeu || 1)).toFixed(1) })]),
+          el('li', {}, [el('span', { text: '🧪 Fusions tentées' }), el('span', { text: String(stats.fusionsTentees || 0) })]),
+          el('li', {}, [el('span', { text: '📜 Quêtes terminées' }), el('span', { text: String(stats.quetesTerminees || 0) })]),
+          el('li', {}, [el('span', { text: '🧰 Aides utilisées' }), el('span', { text: String(stats.aidesUtilisees || 0) })]),
+          el('li', {}, [el('span', { text: '📅 Jours de jeu' }), el('span', { text: String(stats.joursDeJeu || 1) })]),
+          el('li', {}, [el('span', { text: '🔥 Série de connexion' }), el('span', { text: `${stats.serie || 1} jour(s)` })]),
+          el('li', {}, [el('span', { text: '🧪 Potions' }), el('span', { text: String(stats.potions || 0) })]),
+          el('li', {}, [el('span', { text: '👥 Amis' }), el('span', { text: String(stats.amis || 0) })]),
+        ]),
+      ]),
+    ]);
+    ouvrirModale({ titre: `🪪 Profil de ${profil.nom}`, contenu });
+  }
+
+  /** Demande l'ajout d'un ami par pseudonyme et affiche le code à transmettre. */
+  async _demanderAmi(pseudo) {
+    const r = await this.jeu.demanderAmi(pseudo);
+    if (!r.ok) { toast(r.erreur, 'warn'); return; }
+    this.amis();
+    this.majTopbar();
+    if (r.livre) {
+      toast(`📨 Demande envoyée à ${r.demande.vers.nom}. Il/elle doit l’accepter pour devenir votre ami (+${POINTS_PAR_AMI} 🧪 chacun).`, 'good', 9000);
+      return;
+    }
+    this._afficherCode(
+      `🎟️ Code d’invitation pour ${r.demande.vers.nom}`,
+      `Transmettez ce code à ${r.demande.vers.nom} : il/elle le colle dans l’écran Amis et pourra accepter votre demande.`,
+      r.code,
+    );
+  }
+
+  /** Accepte une demande reçue : amitié + potions, puis code de confirmation à renvoyer. */
+  async _accepterAmi(id) {
+    const r = await this.jeu.accepterAmi(id);
+    if (!r.ok) { toast(r.erreur, 'warn'); return; }
+    this.amis();
+    this.majTopbar();
+    toast(`🫂 ${r.ami.nom} est maintenant votre ami ! +${r.potions} potions 🧪 (total : ${r.potionsTotal}).`, 'good', 9000);
+    // Avec un relais configuré et joignable, la confirmation part toute seule :
+    // on n'ouvre une fenêtre de code que si l'envoi direct n'a pas eu lieu.
+    if (r.code && !r.livre) {
+      this._afficherCode(
+        `✅ Amitié acceptée avec ${r.ami.nom}`,
+        `Pour que ${r.ami.nom} reçoive ses ${POINTS_PAR_AMI} potions à son tour, renvoyez-lui ce code (inutile si un relais d’amis est configuré et joignable).`,
+        r.code,
+      );
+    }
+  }
+
+  /** Ajoute un ami (ou confirme une amitié) depuis un code collé. */
+  _traiterCodeAmi(texte) {
+    const r = this.jeu.traiterCodeAmi(texte);
+    if (!r.ok) { toast(r.erreur, 'warn'); return; }
+    this.amis();
+    this.majTopbar();
+    // L'annonce d'une amitié confirmée vient de l'événement (une seule fois).
+    if (!r.potions) toast(`👥 Demande de ${r.demande?.nom || 'ce joueur'} ajoutée : accepter ou refuser.`, 'good', 8000);
+  }
+
+  /** Modale de notification d'une demande d'ami : « voulez-vous l'ajouter ? ». */
+  notifierDemandeAmi(demande) {
+    ouvrirModale({
+      titre: '👥 Demande d’ami',
+      contenu: el('div', {}, [
+        el('p', {}, [
+          el('b', { text: `${demande.avatar || '🧪'} ${demande.nom}` }),
+          el('span', { text: ' veut vous ajouter dans vos amis.' }),
+        ]),
+        el('p', { class: 'muted', text: `Voulez-vous l’ajouter dans vos amis ? Vous recevrez ${POINTS_PAR_AMI} potions 🧪 de familier.` }),
+      ]),
+      actions: [
+        { label: '❌ Refuser', action: () => { this.jeu.refuserAmi(demande.id); toast('Demande refusée.', 'warn'); this.amis(); this.majTopbar(); return true; } },
+        { label: '✅ Oui, ajouter', variant: 'primary', action: () => { this._accepterAmi(demande.id); return true; } },
+      ],
+    });
+  }
+
+  /** Affiche un code à copier (presse-papiers si possible, sinon champ à recopier). */
+  _afficherCode(titre, explication, code) {
+    const zone = el('div', {}, [
+      el('p', { class: 'muted', text: explication }),
+      el('pre', { class: 'code-preview', text: code }),
+    ]);
+    ouvrirModale({
+      titre,
+      contenu: zone,
+      actions: [
+        { label: '📋 Copier', action: () => { this._copier(code); return false; } },
+        { label: 'Fermer' },
+      ],
+    });
+  }
+
+  async _copier(texte) {
+    try {
+      await navigator.clipboard.writeText(texte);
+      toast('📋 Code copié dans le presse-papiers.', 'good');
+    } catch {
+      toast('Sélectionnez le code affiché pour le copier.', 'warn');
+    }
+  }
+
   /* ===================== PARAMETRES ===================== */
 
   parametres() {
@@ -757,6 +1160,37 @@ export class Vues {
             toast('🤖 Configuration IA enregistrée (aucune clé n\'est conservée côté navigateur).', 'good');
           },
         }, ['✅ Enregistrer']),
+      ]),
+    );
+
+    // Section Relais d'amis (facultatif : sans lui, on échange des codes d'invitation)
+    const amis = $('#settings-amis');
+    clear(amis);
+    const cfgAmis = this.jeu.configAmis();
+    const endpointAmis = el('input', { class: 'input', type: 'url', placeholder: 'https://relais-amis.votre-compte.workers.dev', value: cfgAmis.endpoint || '' });
+    const actifAmis = el('input', { type: 'checkbox' });
+    actifAmis.checked = Boolean(cfgAmis.actif);
+    amis.append(
+      el('p', { class: 'muted', text: '🔐 Aucune clé d\'API ici non plus : le navigateur n\'envoie que des pseudonymes à une URL publique. Le relais (exemple fourni : server/worker-amis.js) transporte les demandes d\'amis et les acceptations. Sans relais, tout fonctionne par codes d\'invitation à coller.' }),
+      ligne('📡 URL du relais d\'amis', endpointAmis),
+      ligne('✅ Activer le relais', actifAmis),
+      el('div', { class: 'row' }, [
+        el('button', {
+          class: 'btn btn-primary',
+          onClick: () => {
+            this.jeu.majConfigAmis({ endpoint: endpointAmis.value.trim(), actif: actifAmis.checked });
+            toast('📡 Configuration du relais d\'amis enregistrée.', 'good');
+            this.onAction('amis');
+          },
+        }, ['✅ Enregistrer']),
+        el('button', {
+          class: 'btn',
+          onClick: async () => {
+            const r = await this.jeu.synchroniserAmis();
+            toast(r.ok ? '📡 Relais interrogé.' : `📡 ${r.erreur}`, r.ok ? 'good' : 'warn');
+            this.onAction('amis');
+          },
+        }, ['🔄 Tester maintenant']),
       ]),
     );
   }

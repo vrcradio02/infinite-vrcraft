@@ -41,4 +41,5 @@ export const EV = {
   SAUVEGARDE: 'sauvegarde',
   PREFS: 'prefs',
   MONDE: 'monde',
+  AMI: 'ami',
 };

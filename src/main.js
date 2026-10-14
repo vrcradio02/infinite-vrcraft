@@ -7,11 +7,12 @@ import { PlateauUI } from './ui/board.js';
 import { Vues } from './ui/views.js';
 import { $, el } from './core/dom.js';
 import { on, EV } from './core/events.js';
-import { toast, ouvrirModale, enregistrerEcrans, allerA, activerMenu, activerRaccourcis, onEcran } from './ui/shell.js';
+import { toast, ouvrirModale, enregistrerEcrans, allerA, activerMenu, activerRaccourcis, onEcran, ecranActuel } from './ui/shell.js';
 import { setLangue, appliquerTraductions } from './i18n/index.js';
 import { jouer } from './game/audio.js';
 import { STATUT } from './fusion/engine.js';
 import { GAME } from './config.js';
+import { INTERVALLE_SONDAGE } from './social/relay.js';
 
 const VERSION = GAME.version;
 
@@ -19,7 +20,7 @@ const jeu = new Jeu();
 let plateau = null;
 let vues = null;
 
-const ECRANS = ['accueil', 'jeu', 'inventaire', 'encyclopedie', 'quetes', 'mondes', 'familiers', 'historique', 'sauvegardes', 'parametres', 'profil', 'credits'];
+const ECRANS = ['accueil', 'jeu', 'inventaire', 'encyclopedie', 'quetes', 'mondes', 'familiers', 'amis', 'historique', 'sauvegardes', 'parametres', 'profil', 'credits'];
 
 /* -------------------- Écran de chargement -------------------- */
 
@@ -153,11 +154,49 @@ async function demarrer() {
   if (dernier !== null && dernier !== undefined && resume.slots[dernier]?.existe) {
     await jeu.charger(dernier);
     appliquerPreferences();
+    synchroniserAmis();
     toast(`▶️ Partie « ${jeu.save.nom} » reprise automatiquement.`, 'info');
     allerA('jeu');
   }
 
   installerServiceWorker();
+  demarrerSyncAmis();
+}
+
+/* -------------------- Amis -------------------- */
+
+let timerAmis = null;
+
+/**
+ * Interroge le relais d'amis s'il est configuré : affiche les demandes reçues
+ * (« voulez-vous l'ajouter dans vos amis ? ») et confirme les amitiés acceptées.
+ */
+async function synchroniserAmis({ silencieux = true } = {}) {
+  if (!jeu.save) return { ok: false, erreur: 'Aucune partie chargée.', nouvelles: [], confirmees: [] };
+  const r = await jeu.synchroniserAmis();
+  if (!r.ok) {
+    if (!silencieux) toast(`📡 ${r.erreur}`, 'warn');
+    return { ok: false, erreur: r.erreur, nouvelles: [], confirmees: [] };
+  }
+  for (const d of r.nouvelles) vues.notifierDemandeAmi(d);
+  // Une acceptation est déjà annoncée, une seule fois, par l'événement EV.AMI
+  // (« confirmee »), que l'amitié arrive par le relais ou par un code collé.
+  // Même logique pour les profils : leur arrivée rafraîchit la liste sans rien annoncer.
+  const profilsRecus = r.profils?.recus || 0;
+  if (r.nouvelles.length || r.confirmees.length || profilsRecus) {
+    vues.majTopbar();
+    vues.rendre(ecranActuel());
+  }
+  // Résultat renvoyé pour l'affichage et les vérifications automatiques.
+  return { ok: true, nouvelles: r.nouvelles, confirmees: r.confirmees, profils: r.profils };
+}
+
+/** Démarre l'interrogation périodique du relais (sans effet s'il n'est pas configuré). */
+function demarrerSyncAmis() {
+  clearInterval(timerAmis);
+  synchroniserAmis();
+  timerAmis = setInterval(() => synchroniserAmis(), INTERVALLE_SONDAGE);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) synchroniserAmis(); });
 }
 
 /* -------------------- Actions de l'accueil -------------------- */
@@ -172,6 +211,7 @@ async function traiterActionAccueil(action) {
         if (rep === null) return;
         await jeu.creer(slot, rep.nom, rep.avatar);
         appliquerPreferences();
+        synchroniserAmis();
         toast('✨ Nouvelle partie : Feu, Eau, Terre et Vent vous attendent.', 'good');
       }
       return allerA('jeu');
@@ -182,6 +222,7 @@ async function traiterActionAccueil(action) {
       if (slot === null || slot === undefined || !resume.slots[slot]?.existe) { toast('💤 Aucune partie à continuer.', 'warn'); return allerA('sauvegardes'); }
       await jeu.charger(slot);
       appliquerPreferences();
+      synchroniserAmis();
       toast(`▶️ Partie « ${jeu.save.nom} » chargée.`, 'good');
       return allerA('jeu');
     }
@@ -190,6 +231,7 @@ async function traiterActionAccueil(action) {
     case 'quetes': return allerA('quetes');
     case 'encyclopedie': return allerA('encyclopedie');
     case 'familiers': return allerA('familiers');
+    case 'amis': return allerA('amis');
     case 'parametres': return allerA('parametres');
     case 'tutoriel': return vues.tutoriel();
     default: return undefined;
@@ -237,6 +279,9 @@ async function fusionner(a, b) {
     return;
   }
   if (r.avertissement) toast(`🤖 ${r.avertissement}`, 'info', 7000);
+  // Anti-doublon : la paire inédite produit un élément dont le NOM existe déjà.
+  // Le jeu réutilise l'élément connu au lieu d'ajouter une deuxième fois « Argile Ancien ».
+  if (r.alias) toast(`♻️ ${r.resultat.emoji || '✨'} ${r.resultat.nom} existe déjà : la paire est reconnue, mais l'inventaire ne gagne pas de doublon.`, 'info', 7000);
   plateau.ajouterElement(r.resultat.id);
   plateau.rendre();
 }
@@ -325,6 +370,21 @@ function abonnerEvenements() {
 
   on(EV.MONDE, (m) => toast(`🗺️ Nouveau monde débloqué : ${m.nom}`, 'good'));
 
+  // Amis : notification « voulez-vous l'ajouter dans vos amis ? », récompenses, mise à jour.
+  on(EV.AMI, (def) => {
+    if (def?.type === 'recue') {
+      jouer('quete', jeu.save?.parametres);
+      vues.notifierDemandeAmi(def.demande);
+      vues.majTopbar();
+      return;
+    }
+    if (def?.type === 'confirmee') {
+      if (def.potions) toast(`🎉 ${def.ami.nom} a accepté : +${def.potions} potions 🧪 (total : ${def.potionsTotal}).`, 'good', 9000);
+      jouer('niveau', jeu.save?.parametres);
+    }
+    vues.majTopbar();
+  });
+
   on(EV.PREFS, () => appliquerPreferences());
 
   on('erreur', ({ message }) => toast(message, 'bad'));
@@ -368,4 +428,4 @@ function installerServiceWorker() {
 demarrer();
 
 // Exposé pour le débogage en console (sans donner accès à des secrets, il n'y en a aucun).
-window.__icu = { jeu, allerA, afficherApplication, version: VERSION, plateau: () => plateau, vues: () => vues };
+window.__icu = { jeu, allerA, afficherApplication, version: VERSION, plateau: () => plateau, vues: () => vues, synchroniserAmis };

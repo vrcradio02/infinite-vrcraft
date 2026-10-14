@@ -41,7 +41,9 @@ function fetchSansRegistre(url) {
 
 const { Jeu } = await import('../src/game/game.js');
 const { STATUT } = await import('../src/fusion/engine.js');
-const { ELEMENTS_DE_DEPART, QUOTA } = await import('../src/config.js');
+const { ELEMENTS_DE_DEPART, QUOTA, RARETES } = await import('../src/config.js');
+const { identifiantJoueur } = await import('../src/social/friends.js');
+const { resumeProfil, lireProfil, encoderProfil } = await import('../src/social/profil.js');
 
 let jeu;
 
@@ -378,4 +380,427 @@ test('une ancienne sauvegarde « expérimentale » est officialisée au chargeme
   assert.ok(jeu2.save.creations[PAIRE_CREATION], 'la création doit être migrée');
   assert.ok(jeu2.save.decouvertes[creation.id], 'elle doit revenir dans l\'inventaire');
   assert.ok(jeu2.store.elements.has(creation.id), 'elle doit redevenir un ingrédient utilisable');
+});
+
+/* ---------------- Amis (aucun compte : pseudonymes + codes) ---------------- */
+
+test('sans relais, une demande d’ami passe par un code et rapporte 10 potions à chacun', async () => {
+  const jeuA = new Jeu({ fetchImpl: fetchLocal });
+  await jeuA.initialiser();
+  await jeuA.creer(0, 'Aline', '🔥');
+  const jeuB = new Jeu({ fetchImpl: fetchLocal });
+  await jeuB.initialiser();
+  await jeuB.creer(1, 'Bruno', '💧');
+
+  const potionsA = jeuA.save.potions;
+  const potionsB = jeuB.save.potions;
+
+  const envoi = await jeuA.demanderAmi('Bruno');
+  assert.equal(envoi.ok, true, envoi.erreur);
+  assert.equal(envoi.livre, false, 'sans relais configuré, la demande part par code');
+  assert.match(envoi.code, /^ICU-AMI1:/);
+  assert.equal(jeuA.etatAmis().envoyees.length, 1);
+
+  // Bruno colle le code : la demande l’attend (c’est le moment où il reçoit la notification).
+  const reception = jeuB.traiterCodeAmi(envoi.code);
+  assert.equal(reception.ok, true, reception.erreur);
+  assert.equal(jeuB.etatAmis().recues.length, 1);
+  assert.equal(jeuB.etatAmis().recues[0].nom, 'Aline');
+
+  // Bruno accepte : +10 potions tout de suite.
+  const accept = await jeuB.accepterAmi(reception.demande.id);
+  assert.equal(accept.ok, true, accept.erreur);
+  assert.equal(accept.potions, 10);
+  assert.equal(jeuB.save.potions, potionsB + 10);
+  assert.equal(jeuB.etatAmis().liste[0].nom, 'Aline');
+  assert.ok(accept.code, 'un code de confirmation est fourni (mode sans relais)');
+
+  // Aline colle la confirmation : elle reçoit ses 10 potions.
+  const confirmation = jeuA.traiterCodeAmi(accept.code);
+  assert.equal(confirmation.ok, true, confirmation.erreur);
+  assert.equal(confirmation.potions, 10);
+  assert.equal(jeuA.save.potions, potionsA + 10);
+  assert.equal(jeuA.etatAmis().liste[0].nom, 'Bruno');
+
+  // Rejouer la confirmation ne redonne rien.
+  const encore = jeuA.traiterCodeAmi(accept.code);
+  assert.equal(encore.potions, 0);
+  assert.equal(jeuA.save.potions, potionsA + 10);
+
+  // Les deux parties conservent leurs amis après sauvegarde puis rechargement.
+  await jeuA.sauvegarder();
+  await jeuB.sauvegarder();
+  const reluA = new Jeu({ fetchImpl: fetchLocal });
+  await reluA.initialiser();
+  await reluA.charger(0);
+  assert.equal(reluA.etatAmis().liste.length, 1);
+  assert.equal(reluA.etatAmis().liste[0].nom, 'Bruno');
+  assert.equal(reluA.save.potions, potionsA + 10);
+});
+
+test('une demande refusée disparaît et n’est plus proposée', async () => {
+  const jeuA = new Jeu({ fetchImpl: fetchLocal });
+  await jeuA.initialiser();
+  await jeuA.creer(0, 'Chloé', '🌸');
+  const jeuB = new Jeu({ fetchImpl: fetchLocal });
+  await jeuB.initialiser();
+  await jeuB.creer(1, 'Dora', '⭐');
+
+  const envoi = await jeuA.demanderAmi('Dora');
+  const reception = jeuB.traiterCodeAmi(envoi.code);
+  jeuB.refuserAmi(reception.demande.id);
+  assert.equal(jeuB.etatAmis().recues.length, 0);
+  assert.equal(jeuB.etatAmis().liste.length, 0);
+
+  // La même demande (même date) n’est plus proposée…
+  const relivraison = jeuB.traiterCodeAmi(envoi.code);
+  assert.equal(relivraison.ok, false);
+  assert.equal(jeuB.etatAmis().recues.length, 0, 'un refus ne doit pas être annulé par une relivraison');
+});
+
+test('on ne peut pas s’ajouter soi-même comme ami', async () => {
+  const jeuA = new Jeu({ fetchImpl: fetchLocal });
+  await jeuA.initialiser();
+  await jeuA.creer(0, 'Émile', '🔥');
+  const r = await jeuA.demanderAmi('émile');
+  assert.equal(r.ok, false);
+  assert.match(r.erreur, /vous-même/i);
+});
+
+test('sans relais configuré, la synchronisation l’indique clairement', async () => {
+  const jeuA = new Jeu({ fetchImpl: fetchLocal });
+  await jeuA.initialiser();
+  await jeuA.creer(0, 'Fanny', '💧');
+  const r = await jeuA.synchroniserAmis();
+  assert.equal(r.ok, false);
+  assert.match(r.erreur, /relais/i);
+  assert.deepEqual(r.nouvelles, []);
+});
+
+test('les statistiques comptent les amis et les potions qu’ils ont rapportées', async () => {
+  const jeuA = new Jeu({ fetchImpl: fetchLocal });
+  await jeuA.initialiser();
+  await jeuA.creer(0, 'Gaspard', '🔥');
+  const jeuB = new Jeu({ fetchImpl: fetchLocal });
+  await jeuB.initialiser();
+  await jeuB.creer(1, 'Hélène', '🌍');
+
+  const envoi = await jeuA.demanderAmi('Hélène');
+  const reception = jeuB.traiterCodeAmi(envoi.code);
+  await jeuB.accepterAmi(reception.demande.id);
+
+  const st = jeuB.statistiques();
+  assert.equal(st.amis, 1);
+  assert.equal(st.amisEnAttente, 0);
+  assert.equal(st.potionsAmis, 10);
+  assert.equal(jeuB.etatAmis().potionsParAmi, 10);
+});
+
+test('les amis survivent à l’export / import d’une sauvegarde', async () => {
+  const jeuA = new Jeu({ fetchImpl: fetchLocal });
+  await jeuA.initialiser();
+  await jeuA.creer(0, 'Irène', '🔥');
+  const jeuB = new Jeu({ fetchImpl: fetchLocal });
+  await jeuB.initialiser();
+  await jeuB.creer(1, 'Jonas', '💧');
+
+  const envoi = await jeuA.demanderAmi('Jonas');
+  const reception = jeuB.traiterCodeAmi(envoi.code);
+  await jeuB.accepterAmi(reception.demande.id);
+  await jeuB.sauvegarder(); // la sauvegarde automatique est différée : on la force avant l'export
+
+  const texte = await jeuB.saves.exporterTexte(1);
+  const imp = await jeuA.saves.importer(2, texte);
+  assert.equal(imp.ok, true, imp.erreur);
+  const data = await jeuA.saves.charger(2);
+  assert.equal(data.amis.liste.length, 1);
+  assert.equal(data.amis.liste[0].nom, 'Irène');
+});
+
+/* -------------------- Anti-doublon des créations -------------------- */
+
+test('deux paires différentes qui donnent le même nom ne font qu’un seul élément d’inventaire', async () => {
+  const jeuC = new Jeu({ fetchImpl: fetchLocal });
+  await jeuC.initialiser();
+  await jeuC.creer(0, 'Karine', '⭐');
+
+  // On cherche DEUX paires sans recette officielle dont le composeur produit le même nom
+  // (c'est exactement le cas signalé : « trois Argile Ancien »).
+  const ids = [...jeuC.store.elements.keys()].slice(0, 90);
+  const parNom = new Map();
+  let paires = null;
+  for (const a of ids) {
+    for (const b of ids) {
+      if (a >= b) continue;
+      if (jeuC.store.trouver(a, b)) continue;
+      const c = jeuC.engine.composerExperimental(a, b);
+      if (!c) continue;
+      const cle = c.nom.toLowerCase();
+      if (parNom.has(cle)) { paires = [parNom.get(cle), { a, b, nom: c.nom }]; break; }
+      parNom.set(cle, { a, b, nom: c.nom });
+    }
+    if (paires) break;
+  }
+  assert.ok(paires, 'aucun homonyme trouvé dans le catalogue : test impossible');
+  const [p1, p2] = paires;
+  assert.notDeepEqual([p1.a, p1.b], [p2.a, p2.b]);
+
+  const r1 = await jeuC.fusionner(p1.a, p1.b, { mode: 'creativite' });
+  assert.equal(r1.ok, true, r1.erreur);
+  assert.equal(r1.resultat.nom.toLowerCase(), p1.nom.toLowerCase());
+  assert.equal(r1.alias, false);
+  const inventaireApres1 = Object.keys(jeuC.save.decouvertes).length;
+
+  const r2 = await jeuC.fusionner(p2.a, p2.b, { mode: 'creativite' });
+  assert.equal(r2.ok, true, r2.erreur);
+  const inventaireApres2 = Object.keys(jeuC.save.decouvertes).length;
+
+  assert.equal(r2.resultat.id, r1.resultat.id, 'le même nom doit désigner le même élément');
+  assert.equal(r2.alias, true, 'la seconde paire doit être signalée comme un raccourci');
+  assert.equal(inventaireApres2, inventaireApres1, 'aucune entrée d’inventaire en double');
+  assert.equal(jeuC.save.stats.decouvertes, inventaireApres2);
+
+  const homonymes = Object.values(jeuC.save.creations).filter((c) => String(c.nom).toLowerCase() === p1.nom.toLowerCase());
+  assert.equal(homonymes.length, 2, 'les deux paires restent enregistrées et reproductibles');
+  assert.equal(jeuC.creationExistante(p1.a, p1.b).id, jeuC.creationExistante(p2.a, p2.b).id);
+  assert.equal(jeuC.store.trouver(p2.a, p2.b).result, r1.resultat.id, 'la paire reconnue renvoie l’élément conservé');
+});
+
+test('la même paire fusionnée trois fois n’ajoute qu’un seul élément à l’inventaire', async () => {
+  const jeuE = new Jeu({ fetchImpl: fetchLocal });
+  await jeuE.initialiser();
+  await jeuE.creer(0, 'Lucie', '🌈');
+
+  // Paire SANS recette officielle : la première fusion crée l'élément, les suivantes le
+  // reconnaissent (c'est le cas signalé : « trois Argile Ancien »).
+  const tous = [...jeuE.store.elements.keys()];
+  let paire = null;
+  for (const a of tous) {
+    for (const b of tous) {
+      if (a >= b) continue;
+      if (jeuE.store.trouver(a, b)) continue;
+      const compo = jeuE.engine.composerExperimental(a, b);
+      // Le nom composé ne doit pas déjà exister, sinon la fusion pointerait un élément connu.
+      if (!compo || jeuE.elementParNom(compo.nom)) continue;
+      paire = [a, b];
+      break;
+    }
+    if (paire) break;
+  }
+  assert.ok(paire, 'aucune paire libre dans le catalogue : test impossible');
+
+  const decouvertesAvant = Object.keys(jeuE.save.decouvertes).length;
+  const resultats = [];
+  for (let i = 0; i < 3; i++) resultats.push(await jeuE.fusionner(paire[0], paire[1], { mode: 'creativite' }));
+
+  for (const r of resultats) assert.equal(r.ok, true, r.erreur);
+  const idCree = resultats[0].resultat.id;
+  assert.equal(resultats[0].alias, false, 'la première fusion crée un élément vraiment neuf');
+  assert.equal(resultats[1].resultat.id, idCree, 'la deuxième fusion doit viser le même élément');
+  assert.equal(resultats[2].resultat.id, idCree, 'la troisième fusion doit viser le même élément');
+  assert.deepEqual(resultats.map((r) => r.statut), [STATUT.NOUVEAU, STATUT.CONNU, STATUT.CONNU]);
+
+  assert.equal(
+    Object.keys(jeuE.save.decouvertes).length,
+    decouvertesAvant + 1,
+    'une seule entrée d’inventaire ajoutée pour trois fusions identiques',
+  );
+  assert.equal(
+    Object.keys(jeuE.save.decouvertes).filter((id) => id === idCree).length,
+    1,
+    'l’élément créé n’apparaît qu’une fois dans l’inventaire',
+  );
+  // Le nom est l’identité visible : aucun homonyme dans l’inventaire.
+  const homonymes = Object.values(jeuE.save.decouvertes)
+    .filter((d) => jeuE.store.elements.get(d.id)?.nom?.toLowerCase() === resultats[0].resultat.nom.toLowerCase());
+  assert.equal(homonymes.length, 1, 'un seul élément pour un même nom dans l’inventaire');
+  assert.equal(jeuE.save.stats.decouvertes, Object.keys(jeuE.save.decouvertes).length);
+  assert.equal(Object.keys(jeuE.save.creations).length, 1, 'une seule création enregistrée pour la paire');
+  assert.equal(jeuE.save.stats.experimentales, 1, 'le journal expérimental ne compte pas de doublon');
+});
+
+test('une partie déjà enregistrée avec des créations homonymes est nettoyée au chargement', async () => {
+  const { nouvelleSauvegarde } = await import('../src/saves/saves.js');
+  const jeuD = new Jeu({ fetchImpl: fetchLocal });
+  await jeuD.initialiser();
+  const tous = [...jeuD.store.elements.keys()];
+  const [a, b] = tous;
+  // Troisième ingrédient SANS recette officielle avec `a` : la paire doit dépendre de la
+  // création pour que le test vérifie bien le repointage de la recette du joueur.
+  const c = tous.find((id) => id !== a && id !== b && !jeuD.store.trouver(a, id));
+  assert.ok(c, 'catalogue trop petit pour le test');
+
+  const save = nouvelleSauvegarde('Doublons', '🌍');
+  save.creations['k1'] = { id: 'x-test-1', nom: 'Argile Ancien', a, b, categorie: 'Matière', rarete: 'Rare', monde: 'libre' };
+  save.creations['k2'] = { id: 'x-test-2', nom: 'argile ancien', a, b: c, categorie: 'Matière', rarete: 'Rare', monde: 'libre' };
+  save.decouvertes['x-test-1'] = { id: 'x-test-1', date: new Date().toISOString(), source: 'creation', rarete: 'Rare', premiere: true };
+  save.decouvertes['x-test-2'] = { id: 'x-test-2', date: new Date().toISOString(), source: 'creation', rarete: 'Rare', premiere: true };
+
+  await jeuD.activer(0, save);
+
+  const idsCrees = Object.values(jeuD.save.creations).map((x) => x.id);
+  assert.deepEqual([...new Set(idsCrees)], ['x-test-1'], 'les créations homonymes pointent sur le même élément');
+  assert.ok(jeuD.save.decouvertes['x-test-1']);
+  assert.equal(jeuD.save.decouvertes['x-test-2'], undefined, 'le doublon disparaît de l’inventaire');
+  assert.equal(jeuD.store.elements.has('x-test-2'), false, 'le doublon disparaît aussi du catalogue de la partie');
+  assert.equal(jeuD.store.trouver(a, c).result, 'x-test-1', 'l’ancienne paire produit l’élément conservé');
+  assert.equal(jeuD.save.stats.decouvertes, Object.keys(jeuD.save.decouvertes).length);
+});
+
+/* -------------------- Profils partagés entre amis -------------------- */
+
+/** Relais factice complet : messages (livrés une fois) + profils (conservés). */
+function relaisFactice() {
+  const boites = new Map();
+  const profils = new Map();
+  const appels = [];
+  const fetchImpl = async (url, options = {}) => {
+    const u = String(url);
+    appels.push(`${options.method || 'GET'} ${u}`);
+    const json = (corps) => ({ ok: true, status: 200, async json() { return corps; }, async text() { return JSON.stringify(corps); } });
+    if (u.includes('/profils')) {
+      const ids = (new URL(u).searchParams.get('ids') || '').split(',').filter(Boolean);
+      return json({ ok: true, profils: ids.map((id) => profils.get(id)).filter(Boolean) });
+    }
+    if (u.includes('/profil') && options.method === 'POST') {
+      const p = JSON.parse(options.body).profil;
+      profils.set(p.id, p);
+      return json({ ok: true });
+    }
+    if (options.method === 'POST') {
+      const ev = JSON.parse(options.body);
+      const destinataire = ev.vers.id;
+      const liste = (boites.get(destinataire) || []).filter((e) => e.id !== ev.id);
+      liste.push(ev);
+      boites.set(destinataire, liste);
+      return json({ ok: true });
+    }
+    const pour = new URL(u).searchParams.get('pour');
+    const evenements = boites.get(pour) || [];
+    boites.delete(pour);
+    return json({ ok: true, evenements });
+  };
+  return { fetchImpl, profils, appels };
+}
+
+test('deux amis échangent leurs profils par le relais (niveau, découvertes, animaux, statistiques)', async () => {
+  const relais = relaisFactice();
+  const jeuA = new Jeu({ fetchImpl: fetchLocal });
+  await jeuA.initialiser();
+  await jeuA.creer(0, 'Lucie', '🔥');
+  const jeuB = new Jeu({ fetchImpl: fetchLocal });
+  await jeuB.initialiser();
+  await jeuB.creer(1, 'Marc', '💧');
+  // Les deux joueurs parsent de vraies fusions pour que leurs profils ne soient pas vides.
+  await jeuA.fusionner('feu', 'eau');
+  await jeuA.fusionner('eau', 'terre');
+  await jeuB.fusionner('feu', 'terre');
+
+  jeuA.majConfigAmis({ endpoint: 'https://relais.test', actif: true });
+  jeuB.majConfigAmis({ endpoint: 'https://relais.test', actif: true });
+  jeuA.fetch = relais.fetchImpl;
+  jeuB.fetch = relais.fetchImpl;
+
+  // Amitié : demande de Lucie, acceptation de Marc.
+  const envoi = await jeuA.demanderAmi('Marc');
+  assert.equal(envoi.livre, true);
+  const syncB = await jeuB.synchroniserAmis();
+  assert.equal(syncB.nouvelles.length, 1);
+  await jeuB.accepterAmi(syncB.nouvelles[0].id);
+  await jeuA.synchroniserAmis(); // Lucie reçoit la confirmation (+10 potions)
+
+  // Chacun publie son profil et lit celui de l'autre.
+  const syncA = await jeuA.synchroniserAmis();
+  assert.equal(syncA.profils.publie, true, 'mon profil part vers le relais');
+  const profilMarc = jeuA.profilAmi(identifiantJoueur('Marc'));
+  assert.ok(profilMarc, 'le profil de Marc doit être récupéré');
+  assert.equal(profilMarc.nom, 'Marc');
+  assert.equal(profilMarc.progression.niveau, jeuB.save.niveau);
+  assert.equal(profilMarc.decouvertes.total, Object.keys(jeuB.save.decouvertes).length);
+  assert.equal(profilMarc.familiers.total, Object.keys(jeuB.save.familiers).length);
+  assert.ok(profilMarc.familiers.liste.some((f) => f.nom === 'Flammichou'), 'ses animaux sont visibles');
+  assert.equal(profilMarc.stats.fusionsTentees, jeuB.save.stats.fusionsTentees);
+  assert.ok(profilMarc.mondes.total >= 1, 'ses mondes débloqués sont visibles');
+  assert.ok(profilMarc.succes.total >= 1, 'ses succès sont visibles');
+  assert.ok(profilMarc.decouvertes.dernieres.length >= 1, 'ses découvertes sont listées');
+  // Ses objets rares (Rare et plus) sont comptés ET listés, et ses animaux arrivent avec
+  // leur rareté : c'est ce qu'un ami vient voir dans la fiche.
+  assert.ok(profilMarc.decouvertes.totalRares >= 1, 'Marc a découvert au moins un objet rare (Lave)');
+  assert.equal(profilMarc.decouvertes.totalRares, Object.values(jeuB.save.decouvertes).filter((d) => ['Rare', 'Épique', 'Légendaire', 'Mythique', 'Cosmique', 'Secret'].includes(d.rarete)).length);
+  assert.ok(profilMarc.decouvertes.rares.some((x) => x.nom === 'Lave'), 'ses plus beaux objets sont nommés');
+  for (const f of profilMarc.familiers.liste) assert.ok(RARETES.includes(f.rarete), `rareté d’animal inconnue : ${f.rarete}`);
+
+  // Le sien aussi est lisible par Marc (au tour suivant de l'interrogation automatique).
+  await jeuB.synchroniserAmis();
+  const vuParB = jeuB.profilAmi(identifiantJoueur('Lucie'));
+  assert.equal(vuParB?.nom, 'Lucie');
+  assert.equal(vuParB.decouvertes.total, Object.keys(jeuA.save.decouvertes).length);
+
+  // Le profil ne transporte rien de la partie : ni historique, ni paramètres, ni recettes.
+  const texte = JSON.stringify(profilMarc);
+  for (const interdit of ['historique', 'parametres', 'sauvegardeAuto', 'aideQuota', 'cadeaux', '"decouvertes":{"feu"']) {
+    assert.equal(texte.includes(interdit), false, `« ${interdit} » ne doit pas être publié`);
+  }
+  assert.equal(texte.includes('fusionsTentees'), true);
+});
+
+test('le profil d’un ami s’échange aussi par code, sans relais', async () => {
+  const jeuA = new Jeu({ fetchImpl: fetchLocal });
+  await jeuA.initialiser();
+  await jeuA.creer(0, 'Nina', '🌸');
+  await jeuA.fusionner('vent', 'terre');
+  const jeuB = new Jeu({ fetchImpl: fetchLocal });
+  await jeuB.initialiser();
+  await jeuB.creer(1, 'Omar', '⭐');
+
+  const code = jeuA.codeProfil();
+  assert.equal(code.ok, true, code.erreur);
+  const importe = jeuB.importerProfil(code.code);
+  assert.equal(importe.ok, true, importe.erreur);
+  assert.equal(importe.profil.nom, 'Nina');
+
+  const vu = jeuB.profilAmi(identifiantJoueur('Nina'));
+  assert.equal(vu.decouvertes.total, Object.keys(jeuA.save.decouvertes).length);
+  assert.equal(vu.source, 'code');
+
+  // Un texte quelconque n'est jamais accepté comme profil.
+  assert.equal(jeuB.importerProfil('coucou').ok, false);
+  assert.equal(jeuB.importerProfil(code.code.slice(0, 20)).ok, false);
+});
+
+test('les profils d’amis survivent à l’export / import d’une sauvegarde', async () => {
+  const jeuA = new Jeu({ fetchImpl: fetchLocal });
+  await jeuA.initialiser();
+  await jeuA.creer(0, 'Pia', '🌍');
+  const jeuB = new Jeu({ fetchImpl: fetchLocal });
+  await jeuB.initialiser();
+  await jeuB.creer(1, 'Quentin', '🔥');
+
+  const code = jeuA.codeProfil();
+  jeuB.importerProfil(code.code);
+  await jeuB.sauvegarder();
+
+  const texte = await jeuB.saves.exporterTexte(1);
+  const imp = await jeuA.saves.importer(2, texte);
+  assert.equal(imp.ok, true, imp.erreur);
+  const data = await jeuA.saves.charger(2);
+  assert.equal(Object.keys(data.profils).length, 1, 'le profil importé fait partie de la sauvegarde');
+  assert.equal(data.profils[identifiantJoueur('Pia')].profil.nom, 'Pia');
+});
+
+test('un profil non fiable est neutralisé au chargement de la sauvegarde', async () => {
+  const { nouvelleSauvegarde } = await import('../src/saves/saves.js');
+  const jeuA = new Jeu({ fetchImpl: fetchLocal });
+  await jeuA.initialiser();
+  const save = nouvelleSauvegarde('Injection', '🧪');
+  save.profils = {
+    'cle-bidon': { profil: { nom: 'Pirate', type: 'profil', id: 'qui-1', script: '<script>alert(1)</script>' }, recuLe: '2026-06-01T10:00:00.000Z' },
+    nul: null,
+    texte: 'pas un objet',
+  };
+  await jeuA.activer(0, save);
+  const profils = jeuA.profilsAmis();
+  assert.deepEqual(Object.keys(profils), [identifiantJoueur('Pirate')], 'rangé sous l’identifiant dérivé du pseudo');
+  assert.equal(JSON.stringify(profils).includes('<script>'), false);
+  assert.equal(profils[identifiantJoueur('Pirate')].script, undefined);
 });

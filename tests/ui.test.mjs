@@ -92,6 +92,68 @@ test('l’écran Familiers propose de donner une potion et affiche le compteur',
   assert.match(views, /_donnerPotion\(/, 'le bouton doit appeler _donnerPotion');
 });
 
+/* ------------------- Système d'amis ------------------- */
+
+test('l’écran Amis existe : navigation, écran et carte d’accueil', () => {
+  assert.match(html, /data-screen="amis"/, 'bouton de navigation manquant');
+  assert.match(html, /id="screen-amis"[^>]*data-screen="amis"[^>]*hidden/, 'écran amis absent ou non masqué au chargement');
+  assert.match(html, /data-action="amis"/, 'carte d’accueil « Amis » manquante');
+  assert.match(html, /id="friends-card"/);
+  assert.match(html, /id="friends-inbox"/);
+  assert.match(html, /id="friends-list"/);
+  assert.match(html, /id="friends-code"/);
+  assert.match(html, /id="friends-profil"/, 'carte des profils partagés manquante');
+});
+
+test('chaque ami a une fiche de profil consultable (découvertes, animaux, statistiques)', () => {
+  const views = coreLire('src/ui/views.js');
+  assert.match(views, /voirProfilAmi\(/, 'bouton « Voir le profil » absent');
+  assert.match(views, /_ouvrirProfil\(/, 'la fiche de profil doit être affichable');
+  assert.match(views, /Découvertes/, 'la fiche doit montrer les découvertes');
+  assert.match(views, /Familiers \(/, 'la fiche doit montrer les animaux');
+  assert.match(views, /Statistiques/, 'la fiche doit montrer les statistiques');
+  assert.match(views, /_carteProfils\(/, 'le profil doit pouvoir être partagé');
+  assert.match(views, /codeProfil\(/, 'le partage par code doit être proposé');
+  assert.match(views, /importerProfil\(/, 'un profil reçu par code doit pouvoir être collé');
+  assert.match(views, /_rafraichirProfil\(/, 'un profil doit pouvoir être rafraîchi');
+});
+
+test('la fiche d’un ami montre ses objets, ses objets rares, ses animaux et une comparaison', () => {
+  const views = coreLire('src/ui/views.js');
+  assert.match(views, /_compteursProfil\(/, 'les compteurs d’objets/animaux doivent être affichés');
+  assert.match(views, /_comparerProfils\(/, 'la comparaison avec ma partie doit être affichée');
+  for (const extrait of ['📦 Objets', '💎 Objets rares', '🐾 Animaux', '🎽 Équipe active', 'ses animaux', '⚖️ Vous et']) {
+    assert.ok(views.includes(extrait), `la fiche d’ami doit afficher « ${extrait} »`);
+  }
+  assert.match(views, /_rafraichirTous\(/, 'les aperçus de tous les amis doivent pouvoir être rafraîchis d’un coup');
+  assert.match(views, /🔄 Tout rafraîchir/);
+});
+
+test('les libellés d’amis sont traduisibles (clé friends.profile présente)', () => {
+  const i18n = coreLire('src/i18n/index.js');
+  assert.match(i18n, /'friends\.profile'/, 'clé de traduction des profils absente');
+});
+
+test('le jeu affiche la notification « voulez-vous l’ajouter dans vos amis ? »', () => {
+  const views = coreLire('src/ui/views.js');
+  assert.match(views, /notifierDemandeAmi\(demande\)/, 'fonction de notification absente');
+  assert.match(views, /veut vous ajouter dans vos amis/, 'texte de la demande absent');
+  assert.match(views, /Voulez-vous l’ajouter dans vos amis/, 'question « voulez-vous l’ajouter » absente');
+  assert.match(views, /✅ Oui, ajouter/, 'bouton d’acceptation absent');
+  assert.match(views, /❌ Refuser/, 'bouton de refus absent');
+  assert.match(mainJs, /EV\.AMI/, 'le bootstrap doit réagir aux événements d’amis');
+  assert.match(mainJs, /notifierDemandeAmi/, 'le bootstrap doit afficher la notification');
+});
+
+test('un ami accepté rapporte 10 potions et l’écran permet l’ajout par pseudonyme', () => {
+  const views = coreLire('src/ui/views.js');
+  assert.match(views, /POINTS_PAR_AMI/, 'la récompense doit venir de la logique d’amis');
+  assert.match(views, /Envoyer la demande d’ami/, 'bouton d’envoi absent');
+  assert.match(views, /_demanderAmi\(/, 'le bouton doit déclencher la demande');
+  assert.match(views, /_traiterCodeAmi\(/, 'le code d’invitation doit pouvoir être collé');
+  assert.match(views, /_accepterAmi\(/, 'l’acceptation doit passer par la logique du jeu');
+});
+
 /* ------------------------------- Emoji ------------------------------- */
 
 test('chaque bouton de navigation porte un emoji hors de sa zone traduite', () => {
@@ -143,6 +205,7 @@ test('les libellés générés en JavaScript portent aussi des emoji', () => {
     '🎨 Thème',
     '🧪 Donner une potion',
     '🧬 Création',
+    '👥 Demande d’ami',
   ]) {
     assert.ok(views.includes(extrait), `libellé attendu absent de views.js : ${extrait}`);
   }

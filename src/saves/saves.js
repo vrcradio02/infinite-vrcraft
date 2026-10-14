@@ -45,6 +45,11 @@ export function nouvelleSauvegarde(nom = 'Joueur', avatar = '🧪') {
     creations: {},
     // Potions de familier : +1 niveau et recharge du quota d'aides.
     potions: POTIONS.depart,
+    // Amis (aucun compte) : liste d'amis, demandes reçues/envoyées, potions déjà versées.
+    amis: { liste: [], recues: [], envoyees: [], cadeaux: [], traitees: [] },
+    // Aperçus de profil reçus des amis (voir src/social/profil.js) : jamais la partie, jamais
+    // la moindre donnée personnelle — seulement ce que l'ami a bien voulu partager.
+    profils: {},
     succes: {},
     mondes: { libre: true, nature: true },
     collections: {},

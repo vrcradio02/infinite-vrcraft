@@ -9,15 +9,24 @@ import { RecipeStore } from '../fusion/store.js';
 import { FusionEngine, STATUT } from '../fusion/engine.js';
 import { GestionnaireSauvegardes } from '../saves/saves.js';
 import { progression, titrePourNiveau, xpPourRarete, recompenseNiveau, xpPourFusionConnue } from './progression.js';
-import { evaluerSucces } from '../quests/achievements.js';
+import { evaluerSucces, SUCCES } from '../quests/achievements.js';
 import { tirerQuetes, cleJour, cleSemaine, avancerQuete } from '../quests/quests.js';
 import { chargerFamiliers, nouveauFamilier, gagnerXpFamilier, niveauFamilier, indexerFamiliers } from '../pets/pets.js';
 import { QuotaAides, executerAide } from '../pets/help.js';
 import { chargerMondes, etatMondes, mondeDebloque } from './mondes.js';
 import { chargerCollections, marquerCollections, collectionsNouvelles } from './collections.js';
-import { EQUIPE_MAX, QUOTA, POTIONS, RARETES } from '../config.js';
+import { slugify } from '../fusion/normalize.js';
+import { EQUIPE_MAX, QUOTA, POTIONS, RARETES, AMIS } from '../config.js';
 import { emit, EV } from '../core/events.js';
 import { obtenirAideIA, iaDisponible, chargerConfigIA, enregistrerConfigIA } from '../ai/ai.js';
+import {
+  normaliserEtatAmis, resumeAmis, identifiantJoueur, creerDemande, enregistrerDemandeEnvoyee,
+  ajouterDemandeRecue, accepterDemande, refuserDemande, retirerAmi as retirerAmiEtat,
+  annulerDemandeEnvoyee, creerReponse, traiterReponse, encoderCode, lireCode,
+  TYPE_DEMANDE, TYPE_REPONSE,
+} from '../social/friends.js';
+import { chargerConfigAmis, enregistrerConfigAmis, relaisDisponible, publierEvenement, recupererEvenements, publierProfil as publierProfilRelais, recupererProfils } from '../social/relay.js';
+import { construireProfil, normaliserProfil, normaliserProfilsAmis, encoderProfil, lireProfil } from '../social/profil.js';
 
 /** Conditions de déblocage des familiers (progression du joueur). */
 const DEBLOCAGE_FAMILIERS = [
@@ -137,10 +146,16 @@ export class Jeu {
     this.quota = new QuotaAides(slot).restaurer(data.aideQuota);
     this.save.potions = Number.isFinite(this.save.potions) ? this.save.potions : POTIONS.depart;
 
+    // Amis : liste blanche de champs, doublons retirés, bornes appliquées.
+    this.save.amis = normaliserEtatAmis(this.save.amis);
+
     // Créations du joueur : rechargées dans le catalogue AVANT le reste, car elles
     // comptent comme des éléments officiels (découvertes, mondes, collections, succès).
     this.save.creations = this.save.creations || {};
     this._restaurerCreations();
+    // Parties créées avant la règle anti-doublon : on fusionne les créations homonymes
+    // (même nom affiché = un seul élément dans l'inventaire).
+    this._dedoublonnerCreations();
     // Série de connexion (facultative, sans punition).
     this._majSerie();
 
@@ -307,7 +322,7 @@ export class Jeu {
 
     const statut = dejaConnue ? STATUT.CONNU : STATUT.NOUVEAU;
     emit(EV.FUSION, { statut, resultat: meta, creation: true });
-    return { ok: true, statut, resultat: meta, creation: true, source, avertissement, dejaConnue };
+    return { ok: true, statut, resultat: meta, creation: true, source, avertissement, dejaConnue, alias: Boolean(meta.alias) };
   }
 
   /** Ajoute la recette reproductible d'une création au magasin (idempotent). */
@@ -320,10 +335,29 @@ export class Jeu {
   }
 
   /**
+   * Élément du catalogue portant DÉJÀ ce nom (accents, casse et espaces ignorés).
+   * C'est la règle anti-doublon : le nom est l'identité visible du joueur, donc deux
+   * créations qui s'appellent « Argile Ancien » ne doivent jamais faire deux entrées
+   * d'inventaire, même si elles viennent de paires d'ingrédients différentes.
+   */
+  elementParNom(nom) {
+    const cle = slugify(String(nom || ''));
+    if (!cle) return null;
+    for (const e of this.store.elements.values()) {
+      if (slugify(e.nom) === cle) return e;
+    }
+    return null;
+  }
+
+  /**
    * Construit les métadonnées définitives d'une création : les données du composeur
    * (id, emoji, monde) servent de socle, celles de la proposition (IA ou locale) priment.
    * Une catégorie inventée par le service IA est ramenée sur une catégorie existante du
    * catalogue afin de garder des filtres cohérents.
+   *
+   * Si un élément porte DÉJÀ ce nom (recette officielle ou création précédente), c'est LUI
+   * qui est renvoyé : la nouvelle paire devient un simple raccourci vers l'élément existant,
+   * et l'inventaire ne gagne aucune entrée en double.
    */
   _metaCreation(a, b, resultat) {
     const base = this.engine.composerExperimental(a, b);
@@ -331,6 +365,9 @@ export class Jeu {
     const id = src.id || base?.id;
     const nom = src.nom || base?.nom;
     if (!id || !nom) return null;
+
+    const doublon = this.elementParNom(nom);
+    if (doublon) return { ...doublon, alias: doublon.id !== id };
     const ea = this.store.elements.get(a);
     const eb = this.store.elements.get(b);
     const categories = new Set([...this.store.elements.values()].map((e) => e.categorie));
@@ -390,6 +427,54 @@ export class Jeu {
     }
     if (migrees) this.save.stats.decouvertes = countDecouvertes(this.save);
     return migrees;
+  }
+
+  /**
+   * Fusionne les créations qui portent le MÊME NOM (parties enregistrées avant la règle
+   * anti-doublon : « trois Argile Ancien » venaient de trois paires différentes).
+   *
+   * L'identifiant conservé est le premier rencontré ; tous les autres sont remplacés partout
+   * (recettes de fusions, découvertes de l'inventaire, journal expérimental) puis oubliés.
+   * Sans cette migration, une partie déjà touchée garderait ses doublons pour toujours.
+   *
+   * @returns {number} nombre de créations fusionnées
+   */
+  _dedoublonnerCreations() {
+    const creations = this.save?.creations || {};
+    const gardeParNom = new Map();
+    const remplacements = new Map();
+
+    for (const [cle, c] of Object.entries(creations)) {
+      const nom = slugify(String(c?.nom || ''));
+      const id = c?.id;
+      if (!nom || !id) continue;
+      const garde = gardeParNom.get(nom);
+      if (!garde) { gardeParNom.set(nom, id); continue; }
+      if (garde === id) continue;
+      remplacements.set(id, garde);
+      creations[cle] = { ...c, id: garde, doublonFusionne: true };
+    }
+
+    if (!remplacements.size) return 0;
+
+    for (const [ancien, garde] of remplacements) {
+      // Toutes les paires qui produisaient l'élément en double produisent désormais le conservé.
+      for (const recette of this.store.index.values()) {
+        if (recette.result === ancien) recette.result = garde;
+      }
+      // Une seule entrée d'inventaire : la découverte du doublon rejoint celle du conservé.
+      const decouverte = this.save.decouvertes?.[ancien];
+      if (decouverte) {
+        if (!this.save.decouvertes[garde]) this.save.decouvertes[garde] = { ...decouverte, id: garde };
+        delete this.save.decouvertes[ancien];
+      }
+      for (const entree of Object.values(this.save.experimental || {})) {
+        if (entree?.id === ancien) entree.id = garde;
+      }
+      this.store.elements.delete(ancien);
+      this.save.stats.decouvertes = countDecouvertes(this.save);
+    }
+    return remplacements.size;
   }
 
   /** Compatibilité : ancien point d'entrée « aide IA », désormais une fusion Créativité. */
@@ -839,6 +924,328 @@ export class Jeu {
   majConfigIA(config) { return enregistrerConfigIA(config); }
 
   /* ------------------------------------------------------------------ */
+  /* Amis (aucun compte : on échange des pseudonymes)                    */
+  /* ------------------------------------------------------------------ */
+
+  /** Mon identifiant public, dérivé de mon pseudonyme (aucune donnée personnelle). */
+  identifiantJoueur() {
+    return identifiantJoueur(this.save?.nom || '');
+  }
+
+  /** État affichable des amis (liste, demandes, identifiant, relais configuré ou non). */
+  etatAmis() {
+    const etat = normaliserEtatAmis(this.save?.amis);
+    return {
+      ...etat,
+      identifiant: this.identifiantJoueur(),
+      resume: resumeAmis(etat),
+      relais: relaisDisponible(),
+      potionsParAmi: AMIS.potionsParAmi,
+      profilsRecus: Object.keys(normaliserProfilsAmis(this.save?.profils)).length,
+    };
+  }
+
+  configAmis() { return chargerConfigAmis(); }
+
+  majConfigAmis(config) {
+    const propre = enregistrerConfigAmis(config);
+    emit(EV.AMI, { type: 'config', config: propre });
+    return propre;
+  }
+
+  /**
+   * Envoie une demande d'ami à un pseudonyme.
+   * La demande part par le relais s'il est configuré ; sinon on renvoie un **code
+   * d'invitation** à transmettre à la personne (copier/coller, message…).
+   */
+  async demanderAmi(pseudo) {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const creation = creerDemande({ de: this.save.nom, vers: pseudo });
+    if (!creation.ok) return creation;
+    const demande = creation.demande;
+
+    const enr = enregistrerDemandeEnvoyee(normaliserEtatAmis(this.save.amis), demande);
+    if (!enr.ok) return enr;
+    this.save.amis = enr.etat;
+
+    const config = chargerConfigAmis();
+    const relais = relaisDisponible(config);
+    const livraison = relais
+      ? await publierEvenement({ endpoint: config.endpoint, evenement: { type: TYPE_DEMANDE, ...demande }, fetchImpl: this.fetch })
+      : { ok: false, erreur: 'Aucun relais d’amis configuré : transmettez le code d’invitation.' };
+
+    this._autosave(true);
+    emit(EV.AMI, { type: 'envoyee', demande, livre: livraison.ok });
+    return {
+      ok: true,
+      demande,
+      livre: livraison.ok,
+      relais,
+      erreur: livraison.ok ? null : livraison.erreur,
+      code: encoderCode({ type: TYPE_DEMANDE, ...demande }),
+    };
+  }
+
+  /** Enregistre une demande reçue (par le relais ou par un code d'invitation collé). */
+  recevoirDemande(demande, { origine = 'code' } = {}) {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const res = ajouterDemandeRecue(normaliserEtatAmis(this.save.amis), demande, { moi: this.save.nom });
+    if (!res.ok) return res;
+    this.save.amis = res.etat;
+    this._autosave(true);
+    emit(EV.AMI, { type: 'recue', demande: res.demande, origine });
+    return { ok: true, demande: res.demande };
+  }
+
+  /**
+   * Accepte une demande : la personne devient un ami et rapporte 10 potions
+   * (une seule fois par ami). Une réponse part vers l'expéditeur pour qu'il reçoive
+   * les siennes, et un code de confirmation est renvoyé pour le mode sans relais.
+   */
+  async accepterAmi(id) {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const etat = normaliserEtatAmis(this.save.amis);
+    const demande = etat.recues.find((d) => d.id === id);
+    const res = accepterDemande(etat, id);
+    if (!res.ok) return res;
+
+    this.save.amis = res.etat;
+    if (res.potions) this.save.potions = (this.save.potions || 0) + res.potions;
+
+    let code = null;
+    let livre = false;
+    if (demande) {
+      const rep = creerReponse({ de: this.save.nom, vers: demande.nom });
+      if (rep.ok) {
+        const reponse = { ...rep.reponse, demandeId: demande.id };
+        code = encoderCode({ type: TYPE_REPONSE, ...reponse });
+        const config = chargerConfigAmis();
+        if (relaisDisponible(config)) {
+          const envoi = await publierEvenement({ endpoint: config.endpoint, evenement: { type: TYPE_REPONSE, ...reponse }, fetchImpl: this.fetch });
+          livre = envoi.ok;
+        }
+      }
+    }
+
+    this._verifierSucces();
+    this._autosave(true);
+    emit(EV.AMI, { type: 'acceptee', ami: res.ami, potions: res.potions || 0, potionsTotal: this.save.potions });
+    return {
+      ok: true,
+      ami: res.ami,
+      potions: res.potions || 0,
+      potionsTotal: this.save.potions,
+      livre,
+      code,
+    };
+  }
+
+  /** Refuse une demande reçue (elle ne sera plus proposée). */
+  refuserAmi(id) {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const res = refuserDemande(normaliserEtatAmis(this.save.amis), id);
+    this.save.amis = res.etat;
+    this._autosave(true);
+    emit(EV.AMI, { type: 'refusee', id });
+    return { ok: true };
+  }
+
+  /** Retire un ami (les potions déjà gagnées restent acquises). */
+  retirerAmi(id) {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const res = retirerAmiEtat(normaliserEtatAmis(this.save.amis), id);
+    this.save.amis = res.etat;
+    this._autosave(true);
+    emit(EV.AMI, { type: 'retiree', id });
+    return { ok: true };
+  }
+
+  /** Annule une demande que j'avais envoyée. */
+  annulerDemandeAmi(id) {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const res = annulerDemandeEnvoyee(normaliserEtatAmis(this.save.amis), id);
+    this.save.amis = res.etat;
+    this._autosave(true);
+    emit(EV.AMI, { type: 'annulee', id });
+    return { ok: true };
+  }
+
+  /**
+   * Ajoute un ami à partir d'un code collé : demande à accepter, ou confirmation
+   * d'acceptation (qui verse alors mes 10 potions).
+   */
+  traiterCodeAmi(texte) {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const lecture = lireCode(texte);
+    if (!lecture.ok) return lecture;
+    const objet = lecture.objet;
+    if (objet.type === TYPE_REPONSE || (!objet.type && objet.id && String(objet.id).startsWith('rep_'))) {
+      return this.traiterReponseAmi(objet);
+    }
+    return this.recevoirDemande(objet, { origine: 'code' });
+  }
+
+  /** Traite la réponse d'un ami qui a accepté : amitié + 10 potions (une seule fois). */
+  traiterReponseAmi(reponse) {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const res = traiterReponse(normaliserEtatAmis(this.save.amis), reponse, { moi: this.save.nom });
+    if (!res.ok) return res;
+    this.save.amis = res.etat;
+    if (res.potions) this.save.potions = (this.save.potions || 0) + res.potions;
+    this._autosave(true);
+    emit(EV.AMI, { type: 'confirmee', ami: res.ami, potions: res.potions || 0, potionsTotal: this.save.potions });
+    return { ok: true, ami: res.ami, potions: res.potions || 0, potionsTotal: this.save.potions, dejaAmi: Boolean(res.dejaAmi) };
+  }
+
+  /**
+   * Interroge le relais : récupère les demandes reçues et les acceptations d'amis.
+   * Sans relais configuré, ne fait rien (les codes d'invitation restent disponibles).
+   */
+  async synchroniserAmis() {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.', nouvelles: [], confirmees: [] };
+    const config = chargerConfigAmis();
+    if (!relaisDisponible(config)) {
+      return { ok: false, erreur: 'Aucun relais d’amis configuré (mode code d’invitation).', nouvelles: [], confirmees: [] };
+    }
+    const rep = await recupererEvenements({ endpoint: config.endpoint, pour: this.identifiantJoueur(), fetchImpl: this.fetch });
+    if (!rep.ok) return { ok: false, erreur: rep.erreur, nouvelles: [], confirmees: [] };
+
+    const nouvelles = [];
+    const confirmees = [];
+    for (const ev of rep.evenements) {
+      if (ev?.type === TYPE_DEMANDE) {
+        const r = this.recevoirDemande(ev, { origine: 'relais' });
+        if (r.ok) nouvelles.push(r.demande);
+      } else if (ev?.type === TYPE_REPONSE) {
+        const r = this.traiterReponseAmi(ev);
+        if (r.ok && !r.dejaAmi) confirmees.push(r);
+      }
+    }
+    if (nouvelles.length || confirmees.length) this._autosave(true);
+    // Profils : le mien est publié (s'il a changé) et je récupère ceux de mes amis.
+    const profils = await this.synchroniserProfils();
+    return { ok: true, nouvelles, confirmees, profils };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Profils partagés (voir les stats, découvertes et animaux d'un ami)  */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Mon aperçu partagé : ce que mes amis voient de ma partie (jamais la partie elle-même).
+   * Il est reconstruit à la demande à partir de la sauvegarde et borné par `profil.js`.
+   */
+  monProfil() {
+    if (!this.save) return null;
+    return construireProfil(this.save, {
+      nomElement: (id) => this.store.elements.get(id) || null,
+      nomPet: (id) => this.petIndex.get(id) || null,
+      nomMonde: (id) => this.mondes.find((m) => m.id === id) || null,
+      nomCollection: (id) => this.collections.find((c) => c.id === id) || null,
+      nomSucces: (id) => SUCCES.find((s) => s.id === id) || null,
+      totalElements: this.store.nombreElements,
+      totalMondes: this.mondes.length,
+      totalCollections: this.collections.length,
+      totalSucces: SUCCES.length,
+    });
+  }
+
+  /** Code de partage de mon profil (fonctionne sans relais, comme les codes d'invitation). */
+  codeProfil() {
+    const profil = this.monProfil();
+    if (!profil) return { ok: false, erreur: 'Aucune partie chargée.' };
+    return { ok: true, code: encoderProfil(profil), profil };
+  }
+
+  /** Publie mon profil sur le relais : mes amis pourront le consulter sans rien coller. */
+  async publierProfil() {
+    const profil = this.monProfil();
+    if (!profil) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const config = chargerConfigAmis();
+    if (!relaisDisponible(config)) {
+      return { ok: false, erreur: 'Aucun relais d’amis configuré : partagez votre profil avec un code.' };
+    }
+    const r = await publierProfilRelais({ endpoint: config.endpoint, profil, fetchImpl: this.fetch });
+    if (r.ok) {
+      this._profilPublie = JSON.stringify(profil);
+      emit(EV.AMI, { type: 'profil-publie', profil });
+    }
+    return { ...r, profil };
+  }
+
+  /**
+   * Enregistre l'aperçu d'un ami (reçu par le relais ou collé sous forme de code).
+   * L'aperçu est revalidé ici : rien de ce qui vient du réseau n'entre tel quel.
+   */
+  enregistrerProfilAmi(profilBrut, { source = 'code' } = {}) {
+    if (!this.save) return { ok: false, erreur: 'Aucune partie chargée.' };
+    const res = normaliserProfil(profilBrut);
+    if (!res.ok) return res;
+    const profils = normaliserProfilsAmis(this.save.profils);
+    profils[res.profil.id] = { profil: res.profil, recuLe: new Date().toISOString(), source };
+    this.save.profils = profils;
+    this._autosave(true);
+    emit(EV.AMI, { type: 'profil-recu', profil: res.profil, source });
+    return { ok: true, profil: res.profil };
+  }
+
+  /** Importe le profil d'un ami depuis un code collé. */
+  importerProfil(texte) {
+    const lecture = lireProfil(texte);
+    if (!lecture.ok) return lecture;
+    return this.enregistrerProfilAmi(lecture.profil, { source: 'code' });
+  }
+
+  /** Aperçu reçu d'un ami (`{ ...profil, recuLe, source }`), ou null s'il n'y en a pas. */
+  profilAmi(id) {
+    const entree = normaliserProfilsAmis(this.save?.profils)[String(id)];
+    return entree ? { ...entree.profil, recuLe: entree.recuLe, source: entree.source } : null;
+  }
+
+  /** Tous les aperçus reçus, indexés par identifiant de joueur. */
+  profilsAmis() {
+    const propres = normaliserProfilsAmis(this.save?.profils);
+    const out = {};
+    for (const [id, entree] of Object.entries(propres)) out[id] = { ...entree.profil, recuLe: entree.recuLe, source: entree.source };
+    return out;
+  }
+
+  /**
+   * Publie mon profil et récupère ceux de mes amis par le relais.
+   * La publication n'a lieu que si mon aperçu a changé depuis le dernier envoi de la
+   * session (`publier:'auto'`), pour ne pas envoyer la même chose toutes les 15 secondes.
+   *
+   * @returns {Promise<{ok:boolean, publie:boolean, recus:number, erreur?:string}>}
+   */
+  async synchroniserProfils({ publier = 'auto' } = {}) {
+    if (!this.save) return { ok: false, publie: false, recus: 0, erreur: 'Aucune partie chargée.' };
+    const config = chargerConfigAmis();
+    if (!relaisDisponible(config)) {
+      return { ok: false, publie: false, recus: 0, erreur: 'Aucun relais d’amis configuré (mode profil par code).' };
+    }
+
+    let publie = false;
+    const profil = this.monProfil();
+    const signature = profil ? JSON.stringify(profil) : null;
+    const doitPublier = publier === true || (publier === 'auto' && signature !== this._profilPublie);
+    if (doitPublier && signature) {
+      const envoi = await publierProfilRelais({ endpoint: config.endpoint, profil, fetchImpl: this.fetch });
+      publie = envoi.ok;
+      if (envoi.ok) this._profilPublie = signature;
+    }
+
+    const ids = (this.save.amis?.liste || []).map((a) => a.id).filter(Boolean);
+    const lecture = await recupererProfils({ endpoint: config.endpoint, ids, fetchImpl: this.fetch });
+    if (!lecture.ok) return { ok: false, publie, recus: 0, erreur: lecture.erreur };
+
+    const avant = Object.keys(this.save.profils || {}).length;
+    for (const p of lecture.profils) this.enregistrerProfilAmi(p, { source: 'relais' });
+    const recus = lecture.profils.filter((p) => normaliserProfil(p).ok).length;
+    if (recus) emit(EV.AMI, { type: 'profils', recus });
+    return { ok: true, publie, recus, connus: avant, demandes: ids.length };
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Série de connexion (facultative, non punitive)                      */
   /* ------------------------------------------------------------------ */
 
@@ -907,6 +1314,9 @@ export class Jeu {
       joursDeJeu: s.stats.joursDeJeu,
       aidesUtilisees: s.stats.aidesUtilisees || 0,
       succes: Object.keys(s.succes || {}).length,
+      amis: (s.amis?.liste || []).length,
+      amisEnAttente: (s.amis?.recues || []).length,
+      potionsAmis: (s.amis?.cadeaux || []).length * AMIS.potionsParAmi,
     };
   }
 }

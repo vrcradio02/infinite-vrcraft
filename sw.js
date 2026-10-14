@@ -19,7 +19,7 @@
  * `VERSION` empêcherait l'activation de vider l'ancien cache. Augmentez `VERSION`
  * à chaque publication qui modifie la coquille.
  */
-const VERSION = 'v4';
+const VERSION = 'v7';
 const CACHE = `icu-${VERSION}`;
 
 const COQUILLE = [
@@ -47,6 +47,9 @@ const COQUILLE = [
   './src/quests/achievements.js',
   './src/pets/pets.js',
   './src/pets/help.js',
+  './src/social/friends.js',
+  './src/social/profil.js',
+  './src/social/relay.js',
   './src/saves/saves.js',
   './src/saves/storage.js',
   './src/saves/validate.js',

@@ -7,7 +7,9 @@
  *  - toute donnée malformée ou suspecte est refusée avec un message clair,
  *  - la validation est pure (aucun accès DOM, aucun effet de bord) => testable.
  */
-import { SAVE_FORMAT_VERSION, IMPORT_MAX_BYTES, NB_SAUVEGARDES, POTIONS } from '../config.js';
+import { SAVE_FORMAT_VERSION, IMPORT_MAX_BYTES, NB_SAUVEGARDES, POTIONS, AMIS } from '../config.js';
+import { normaliserEtatAmis } from '../social/friends.js';
+import { normaliserProfilsAmis } from '../social/profil.js';
 
 /** Bornes de sécurité pour éviter les fichiers abusifs. */
 export const LIMITES = {
@@ -92,6 +94,12 @@ export function validerSauvegarde(data) {
   if (data.historique !== undefined && !Array.isArray(data.historique)) {
     return { ok: false, erreur: ERREURS.TYPES_INVALIDES, details: 'historique.' };
   }
+  if (data.amis !== undefined && (typeof data.amis !== 'object' || data.amis === null || Array.isArray(data.amis))) {
+    return { ok: false, erreur: ERREURS.TYPES_INVALIDES, details: 'amis.' };
+  }
+  if (data.profils !== undefined && (typeof data.profils !== 'object' || data.profils === null || Array.isArray(data.profils))) {
+    return { ok: false, erreur: ERREURS.TYPES_INVALIDES, details: 'profils.' };
+  }
 
   // --- bornes ---
   const nbDecouvertes = data.decouvertes ? Object.keys(data.decouvertes).length : 0;
@@ -99,11 +107,20 @@ export function validerSauvegarde(data) {
   const nbExperimental = data.experimental ? Object.keys(data.experimental).length : 0;
   const nbCreations = data.creations ? Object.keys(data.creations).length : 0;
 
-  if (nbDecouvertes > LIMITES.maxDecouvertes || nbHistorique > LIMITES.maxHistorique || nbExperimental > LIMITES.maxExperimental || nbCreations > LIMITES.maxCreations) {
+  const nbAmis = data.amis && Array.isArray(data.amis.liste) ? data.amis.liste.length : 0;
+  const nbDemandesAmis = data.amis
+    ? (Array.isArray(data.amis.recues) ? data.amis.recues.length : 0)
+      + (Array.isArray(data.amis.envoyees) ? data.amis.envoyees.length : 0)
+    : 0;
+
+  const nbProfils = data.profils && typeof data.profils === 'object' ? Object.keys(data.profils).length : 0;
+
+  if (nbDecouvertes > LIMITES.maxDecouvertes || nbHistorique > LIMITES.maxHistorique || nbExperimental > LIMITES.maxExperimental || nbCreations > LIMITES.maxCreations
+    || nbAmis > AMIS.maxAmis || nbDemandesAmis > AMIS.maxDemandes * 2 || nbProfils > AMIS.maxAmis) {
     return {
       ok: false,
       erreur: ERREURS.LIMITES_DEPASSEES,
-      details: `decouvertes=${nbDecouvertes}, historique=${nbHistorique}, experimental=${nbExperimental}, creations=${nbCreations}.`,
+      details: `decouvertes=${nbDecouvertes}, historique=${nbHistorique}, experimental=${nbExperimental}, creations=${nbCreations}, amis=${nbAmis}, profils=${nbProfils}.`,
     };
   }
 
@@ -164,6 +181,11 @@ export function normaliserSauvegarde(data) {
   d.potions = Number.isFinite(data.potions)
     ? Math.max(0, Math.min(LIMITES.maxPotions, Math.floor(data.potions)))
     : POTIONS.depart;
+  // Amis : normalisés (liste blanche, doublons retirés, bornes) — aucun champ inconnu conservé.
+  d.amis = normaliserEtatAmis(data.amis);
+  // Aperçus de profil des amis : revalidés un par un, identifiant recalculé, entrées
+  // illisibles ignorées (un profil importé est une donnée NON fiable, comme le reste).
+  d.profils = normaliserProfilsAmis(data.profils);
   d.succes = obj(data.succes);
   d.mondes = obj(data.mondes);
   d.collections = obj(data.collections);

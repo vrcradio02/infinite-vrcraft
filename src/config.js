@@ -8,7 +8,7 @@ export const GAME = {
   /** Nom provisoire — modifiable librement. */
   nom: 'Infinite Craft Ultimate',
   slug: 'infinite-vrcraft',
-  version: '1.1.0',
+  version: '1.4.0',
   depot: 'https://github.com/vrcradio02/infinite-vrcraft',
 };
 
@@ -80,6 +80,22 @@ export const POTIONS = {
 /** Équipe active de familiers. */
 export const EQUIPE_MAX = 3;
 
+/**
+ * Système d'amis (aucune inscription : on échange des pseudonymes).
+ *  - `potionsParAmi` : potions offertes UNE SEULE FOIS par ami accepté (les deux joueurs
+ *    reçoivent les leurs) ;
+ *  - `maxAmis` / `maxDemandes` : bornes de sécurité (la sauvegarde reste petite) ;
+ *  - `sondageMs` : intervalle d'interrogation du relais facultatif (voir `server/worker-amis.js`) ;
+ *  - `longueurPseudo` : longueur maximale d'un pseudonyme utilisé comme identifiant d'ami.
+ */
+export const AMIS = {
+  potionsParAmi: 10,
+  maxAmis: 200,
+  maxDemandes: 100,
+  longueurPseudo: 24,
+  sondageMs: 15000,
+};
+
 /** Nombre d'emplacements de sauvegarde (exactement 3). */
 export const NB_SAUVEGARDES = 3;
 
@@ -89,6 +105,7 @@ export const STORAGE_KEYS = {
   slotIndex: 'icu:slot-index:v1',
   quota: (slot) => `icu:quota:${slot}`,
   ai: 'icu:ai:v1',
+  amisRelais: 'icu:amis:relais:v1',
 };
 
 /** Version du format de sauvegarde (permet la migration future). */

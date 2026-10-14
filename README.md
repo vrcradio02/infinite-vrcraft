@@ -2,7 +2,8 @@
 
 Jeu de fusion d'éléments original, jouable dans le navigateur, **sans compte, sans e-mail et sans numéro de téléphone**.
 Il démarre avec exactement **Feu 🔥, Eau 💧, Terre 🌍 et Vent 💨**, puis grandit par fusions, quêtes, mondes,
-collections et familiers.
+collections, familiers et **amis** (on tape le pseudonyme, l'autre reçoit la notification
+« voulez-vous l'ajouter dans vos amis ? », et chaque ami accepté rapporte **10 potions**).
 
 - Jeu publié : <https://vrcradio02.github.io/infinite-vrcraft/>
 - Version locale : gratuite, aucune installation de serveur.
@@ -56,6 +57,7 @@ le projet reste sans dépendance.
 | `npm run check:selectors` | Vérifie que chaque `#id` utilisé existe dans `index.html`. |
 | `npm run check:smoke` | Exécute le vrai `main.js` sous un DOM simulé. |
 | `npm run check` | Enchaîne toutes les vérifications ci-dessus + la validation du registre. |
+| `node tools/serveur-relais.mjs 8787` | Lance le **relais d'amis local** (pour tester les amis à deux navigateurs, sans rien déployer). |
 
 Ordre recommandé pour toute modification de données :
 
@@ -108,6 +110,9 @@ infinite-vrcraft/
 │   ├── ai/
 │   │   ├── ai.js                  IA facultative (point d'entrée sans clé)
 │   │   └── validate-proposal.js   Validation des propositions de l'IA
+│   ├── social/
+│   │   ├── friends.js             Amis : identifiant, demandes, +10 potions (logique pure)
+│   │   └── relay.js               Relais d'amis facultatif (transport HTTP, sans clé)
 │   ├── ui/
 │   │   ├── shell.js               Toasts, modales, navigation, raccourcis
 │   │   ├── board.js               Plateau : glisser-déposer, zoom, pan, palette
@@ -124,8 +129,10 @@ infinite-vrcraft/
 │   ├── mondes.json                8 mondes + conditions de déblocage
 │   └── collections.json           8 collections thématiques
 ├── server/worker-exemple.js       Proxy IA sécurisé (exemple, facultatif)
+├── server/worker-amis.js          Relais d'amis sécurisé (Cloudflare Worker + KV, facultatif)
 ├── tools/
 │   ├── serve.mjs                  Serveur statique
+│   ├── serveur-relais.mjs         Relais d'amis local (même contrat que le Worker, pour tester)
 │   ├── build-registry.mjs         Compile les lots → registre (déterministe, minifié)
 │   ├── validate-registry.mjs      Valide le registre
 │   ├── generate-recipes.mjs       Générateur de lots candidats
@@ -170,6 +177,13 @@ Détails utiles :
   **officialisées automatiquement** au chargement (recomposition déterministe).
 - Le mode Catalogue reste strict : une paire inconnue n'y produit rien, et le jeu se contente d'un
   message discret (aucune fenêtre bloquante) rappelant que la Créativité existe.
+- **Inventaire sans doublon** : le **nom** est l'identité d'une création. Si un élément porte déjà ce
+  nom (accents, casse et espaces ignorés), la nouvelle paire est enregistrée comme **raccourci** vers
+  cet élément au lieu de créer une deuxième entrée « Argile Ancien » ; le jeu l'annonce
+  (« ♻️ … existe déjà ») et l'inventaire reste propre. Les paires deviennent donc interchangeables
+  (`Argile + Temps` et `Argile + Vieux` donnent le même élément si le composeur produit le même nom).
+  Les parties enregistrées avec des doublons (versions précédentes) sont **nettoyées au chargement** :
+  les recettes sont repointées, les découvertes fusionnées et le compteur corrigé.
 
 ### 4.3 Familiers et aides
 
@@ -195,7 +209,54 @@ Détails utiles :
   - dans tous les cas, la recharge de 10 minutes ramène ensuite le compteur à **5/5**.
 - Le bonus de potion survit à un rechargement de page (il est persisté avec le quota).
 
-### 4.4 Sauvegardes
+### 4.4 Amis (aucun compte : un pseudonyme suffit)
+
+On ajoute un ami **en tapant son pseudonyme**, et l'autre joueur reçoit la notification
+« **X veut vous ajouter dans vos amis** » à laquelle il répond par oui ou non.
+
+- **Aucun compte, aucun e-mail** : un joueur est identifié par son pseudonyme, transformé en
+  identifiant stable et lisible (`l'identifiant de « Alex » est alex-1ijkml`), affiché sur l'écran Amis.
+- **+10 potions par ami accepté**, versées **aux deux joueurs** : celui qui accepte les reçoit
+  immédiatement, l'autre les reçoit quand la confirmation lui parvient.
+- La récompense n'est versée **qu'une seule fois par personne** : retirer puis rajouter le même
+  ami ne redonne pas 10 potions (une liste `cadeaux` garde la trace).
+- Les potions sont les mêmes que celles des familiers : elles font **monter un familier d'un niveau**
+  et **rechargent son quota d'aides** (voir §4.3). Ajouter un ami rapporte donc aussi des
+  potions de familier.
+- Une demande **refusée** ne revient pas ; la même personne pourra en renvoyer une **plus tard**.
+- Bornes de sécurité : 200 amis, 50 demandes en attente, 24 caractères de pseudonyme.
+
+Deux façons de faire arriver la notification chez l'autre joueur :
+
+| Mode | Comment ça marche | Quand l'utiliser |
+|---|---|---|
+| **Relais d'amis** (facultatif) | Un petit relais HTTP transporte la demande, puis la confirmation. On colle son adresse dans **Paramètres → Relais d'amis** et on coche « activer le relais ». Exemple prêt à déployer : `server/worker-amis.js` (Cloudflare Worker + KV, gratuit) ; pour tester sans rien déployer : `node tools/serveur-relais.mjs`. | Deux joueurs en ligne, notification immédiate. |
+| **Code d'invitation** (toujours disponible) | Sans relais, le jeu produit un **code court** (`ICU-AMI1:…`) à transmettre soi-même (message, réseau social…). L'ami le colle dans l'écran Amis : la demande apparaît et il peut accepter. Le code de confirmation renvoyé credite les 10 potions de l'autre côté. | Aucun serveur, aucun réglage. |
+
+Règles de sécurité, identiques à celles du service IA : **aucune clé d'API dans le navigateur**, aucun mot
+passe, aucune adresse e-mail, aucune partie de jeu ne quitte l'appareil — seuls un pseudonyme, un
+identifiant dérivé de ce pseudonyme et un horodatage circulent. Les reçus d'amis vivent dans le
+stockage du navigateur (IndexedDB, repli `localStorage`) et sont **exportés/importés avec la partie**,
+validés par liste blanche.
+
+#### Profils partagés (voir les stats, découvertes et animaux d'un ami)
+
+Chaque ami de la liste affiche **👁️ Voir le profil** : niveau et XP, **découvertes** (total,
+répartition par rareté, dernières trouvailles), **animaux** (nom, niveau, équipe active), mondes,
+collections, succès et **statistiques** (fusions, quêtes, aides, jours de jeu, série, potions).
+
+- **Partage** : bouton **📡 Publier mon profil** (relais configuré, rafraîchissement automatique toutes
+  les 15 s) ou **📋 Copier mon profil (code)**, que l'ami colle dans « Profils partagés ».
+- **Ce qui est partagé** : un aperçu **réduit et borné** (≤ 4 Ko) — jamais la carte des découvertes,
+  l'historique des fusions, les recettes, les paramètres ni la sauvegarde.
+- **Ce qui est refusé** : tout profil reçu est revalidé (liste blanche, valeurs bornées, taille), et un
+  **identifiant annoncé n'est jamais cru** : il est recalculé depuis le pseudonyme, côté jeu comme
+  côté relais (`server/worker-amis.js`). Personne ne peut donc écrire dans la boîte — ou écraser le
+  profil publié — de quelqu'un d'autre en recopiant son identifiant.
+
+---
+
+### 4.5 Sauvegardes
 
 - **Exactement 3 emplacements indépendants** (`Sauvegarde 1`, `Sauvegarde 2`, `Sauvegarde 3`).
 - Écriture dans **IndexedDB**, avec repli automatique sur `localStorage` si IndexedDB est indisponible.
@@ -345,8 +406,19 @@ officielles : la promotion en officiel reste une décision humaine (relisez, pui
 - [x] Statistiques complètes, partage de découverte (copie dans le presse-papiers)
 - [x] Classements **locaux** entre les 3 emplacements (aucun faux classement en ligne)
 - [x] Registre officiel **versionné** (42 Ko), compilation déterministe
-- [x] Outils : compilateur, validateur, générateur de lots, vérificateur d'imports, test de fumée
-- [x] **132 tests automatisés** (unitaires + intégration du vrai contrôleur + fumée DOM)
+- [x] **Système d'amis sans compte** : on tape le pseudonyme de l'autre joueur, il reçoit la
+      notification « voulez-vous l'ajouter dans vos amis ? », et **chaque ami accepté rapporte
+      10 potions** (aux deux joueurs), une seule fois par personne
+- [x] **Profil partagé entre amis** : chacun peut consulter le niveau, les découvertes (et leur
+      rareté), les **familiers**, les mondes, les collections, les succès et les statistiques de
+      ses amis — par le relais ou par un code de profil, jamais la sauvegarde
+- [x] Amis livrés par **code d'invitation** (aucun serveur) ou par **relais facultatif**
+      (`server/worker-amis.js`, exemple Cloudflare Worker + KV fourni)
+- [x] **Inventaire sans doublon** : deux paires qui produisent le même nom donnent un seul
+      élément (les parties déjà enregistrées sont nettoyées au chargement)
+- [x] Outils : compilateur, validateur, générateur de lots, vérificateur d'imports, test de fumée,
+      relais d'amis local
+- [x] **188 tests automatisés** (unitaires + intégration du vrai contrôleur + fumée DOM)
 
 ## 9. Fonctionnalités restant à faire
 
@@ -361,10 +433,13 @@ Ces éléments du cahier des charges ne sont **pas** terminés. Ils sont listés
 - [ ] **Défis spéciaux** (contraintes du type « sans indice ») : non implémentés.
 - [ ] **Boss créatifs** : non implémentés.
 - [ ] **Traductions autres que français/anglais** : l'anglais n'est que partiellement traduit.
-- [ ] **Synchronisation serveur** : architecture prévue (`server/`), aucun backend livré
-      (volontairement : le jeu doit rester jouable gratuitement sans serveur).
+- [ ] **Synchronisation de sauvegarde côté serveur** : architecture prévue (`server/`), aucun backend
+      livré (volontairement : le jeu doit rester jouable gratuitement sans serveur). Les **amis**
+      font exception et disposent d'un relais **facultatif** livré en exemple (`server/worker-amis.js`) :
+      il ne transporte que des pseudonymes et des demandes d'amis, jamais de partie.
 - [ ] **Communauté en ligne** (recettes partagées, classements réels) : non implémentée et
-      volontairement non simulée.
+      volontairement non simulée. Le relais d'amis existe, mais il n'y a **aucun serveur de jeu**
+      ni annuaire de joueurs : on se transmet un pseudonyme ou un code d'invitation.
 - [ ] **Accessoires cosmétiques pour familiers** : les récompenses de niveau sont générées mais
       l'écran de personnalisation cosmétique n'existe pas.
 - [ ] **Tests dans un vrai navigateur** (clics, tactile, connexion lente) : voir §11.
@@ -422,10 +497,10 @@ npm test
 ```
 
 ```
-ℹ tests 132
-ℹ pass 132
+ℹ tests 188
+ℹ pass 188
 ℹ fail 0
-ℹ duration_ms ~1800
+ℹ duration_ms ~2100
 ```
 
 Couverture fonctionnelle réelle (extrait) :
@@ -438,6 +513,10 @@ Couverture fonctionnelle réelle (extrait) :
 | Familiers | courbe d'XP, équipe de 3 max, **quota 5/10 min partagé**, persistance après rechargement, aide non consommée sans résultat, **recharge par potion (`0→5/5` et `5/5→10/5`, retour à 5/5 après 10 min)** |
 | Quêtes | déterminisme du tirage quotidien/hebdomadaire, progression par type, succès, mondes, collections |
 | IA | proposition conforme acceptée, ingrédients incohérents refusés, résultat vide refusé |
+| Amis | identifiant stable et distinct par pseudonyme, codes d'invitation aller-retour (accents compris), demande à soi-même refusée, demande en double ignorée, **+10 potions une seule fois** (retirer/rajouter un ami ne redonne rien), refus sans blocage d'une demande plus récente, normalisation/liste blanche, relais absent ou en panne sans plantage |
+| Relais d'amis | **le Worker fourni livre une demande au destinataire et une réponse à celui qui avait demandé** (jamais l'inverse), livraison unique, entrées invalides refusées sans rien stocker, erreur explicite sans stockage KV, **identifiant recalculé depuis le pseudonyme** (impossible d'écrire dans la boîte d'un autre) |
+| Profils | contenu exact de l'aperçu (progression, découvertes par rareté + dernières, familiers, mondes, collections, succès, statistiques), **rien de la partie n'est publié** (historique, paramètres, recettes), bornes et troncature, refus des profils sans pseudonyme, identifiant annoncé ignoré, codes aller-retour, profils d'amis dans la sauvegarde (normalisés, exportés) |
+| Anti-doublon | **deux paires différentes donnant le même nom = un seul élément d'inventaire** (la seconde devient un raccourci), migration d'une partie enregistrée avec des créations homonymes (recettes repointées, découvertes fusionnées, catalogue nettoyé) |
 | Intégration | vrai contrôleur : création de partie, fusion, chaîne Vapeur→Nuage, XP, aides, quota, export/import, 3 emplacements indépendants, **repli sans registre compilé**, **créations officielles (première découverte, reproductibilité, enchaînement, rechargement, export/import, migration des anciennes sauvegardes)**, **potions (niveau exact, quota, refus sans potion)** |
 | Interface (habillage) | règle globale `[hidden]`, masquage de l'écran de chargement, rendu de chaque écran au changement d'onglet, liste déroulante recevant un élément (pas un sélecteur), emoji présents dans la navigation, les titres, les filtres et les écrans |
 | Mise à jour du site | service worker à cache **versionné**, navigations servies « réseau d'abord », purge des anciens caches, coquille pré-cachée ne référençant que des fichiers existants, actions de secours de l'écran de chargement, rechargement unique (sans boucle) après une mise à jour |
@@ -449,10 +528,10 @@ npm run check
 ```
 
 ```
-Modules importés avec succès : 26/26
+Modules importés avec succès : 29/29
 HTML et JavaScript sont cohérents.
 Bootstrap navigateur exécuté sans erreur (DOM simulé).
-Écrans rendus : 10 vérifiés non vides.
+Écrans rendus : 11 vérifiés non vides.
 Registre valide.
 ```
 
@@ -468,6 +547,29 @@ DevTools (36 vérifications, toutes OK) :
   **Eau + Feu = Vapeur** (4 → 5 découvertes) et affichage de l'élément sur le plateau ;
 - les 10 écrans se rendent réellement (contenu non vide) et affichent des emoji ;
 - aucune erreur console.
+
+### Parcours « amis » vérifié à deux joueurs (Chrome headless + relais local)
+
+`verif-amis.mjs` ouvre **deux navigateurs isolés** (Alice et Bruno, stockages séparés) sur le jeu
+servi localement, avec le relais `tools/serveur-relais.mjs`. Les **26 vérifications passent** :
+
+- le relais se configure depuis **Paramètres → Relais d'amis** (l'écran Amis le confirme) ;
+- Alice **tape le pseudonyme « Bruno »** et clique « Envoyer la demande d'ami » : la demande part
+  par le relais (toast « Demande envoyée à Bruno ») ;
+- Bruno reçoit la **modale de notification** « Bruno… veut vous ajouter dans vos amis. Voulez-vous
+  l'ajouter dans vos amis ? Vous recevrez 10 potions » avec les boutons **Refuser** et **Oui, ajouter** ;
+- après acceptation, Bruno passe de **1 à 11 potions**, l'ami apparaît dans sa liste affichée, la
+  notification se referme et la demande est soldée ;
+- Alice **reçoit ses 10 potions à son tour** (11 au total) et voit Bruno dans sa liste ;
+- une **seconde demande du même ami est refusée** (« Vous êtes déjà amis. ») et ne rapporte rien de plus ;
+- Alice **publie son profil** et Bruno le récupère : sa fiche (ouverte par le vrai bouton
+  « 👁️ Voir le profil ») affiche **niveau, découvertes, familiers et statistiques** ;
+- sans relais, le **profil d'un ami s'importe par un code** (source « code ») et s'affiche aussi ;
+- sans relais, un **code d'invitation collé** fait bien apparaître la demande à valider ;
+- aucune erreur JavaScript dans les deux navigateurs.
+
+Le même parcours est couvert en intégration (vrai contrôleur, deux parties simulées) par
+`tests/integration.test.mjs`, et le routage du Worker par `tests/friends.test.mjs`.
 
 ### Parcours « visiteur bloqué » vérifié de bout en bout
 
@@ -523,6 +625,55 @@ avec la partie. Les anciennes sauvegardes qui n'avaient que des créations « ex
 La version est incrémentée en `1.1.0` (`package.json`, `GAME.version`) et le cache du service worker en `v4`,
 condition pour que les visiteurs déjà venus reçoivent réellement cette mise à jour.
 
+### Version 1.4.0 — fiche d'ami détaillée et anti-doublon vérifié en jeu
+
+| Demande | Ce qui a été fait |
+|---|---|
+| **« Rajoute des options pour les amis : voir combien il a d'objets, ses statistiques, ses découvertes, ses animaux… »** | La fiche d'un ami s'ouvre en **un clic** (bouton **👁️ Voir le profil**) et commence par des **compteurs explicites** : 📦 **objets** (et le total du catalogue), 💎 **objets rares**, 🧬 **créations**, 🐾 **animaux**, 🗺️ mondes, 🧩 collections, 🏅 succès. |
+| **Voir ses plus beaux objets, pas seulement les derniers** | Chaque aperçu publie désormais la **liste des objets rares** (Rare et au-delà, les plus rares d'abord, bornée à 8) avec leur rareté et leur date de découverte, en plus de la répartition par rareté et des 12 dernières trouvailles. |
+| **Ses animaux** | La section **🐾 Familiers — ses animaux** affiche le **nombre total**, l'**équipe active** (🎽, résolue en noms et emoji) et la liste des animaux triée du **plus haut niveau au plus bas**, avec **rareté** et niveau. |
+| **Voir ses statistiques et se comparer** | La section **📊 Statistiques** gagne les **objets trouvés** et le **rythme de jeu** (🔮 objets par jour de jeu) ; une carte **⚖️ Vous et *pseudo*** compare ligne par ligne les **objets**, les **objets rares**, les **animaux**, le niveau, les mondes, les collections et les succès (`Vous 42 · Lui 120 (🔺 +78)`). |
+| **Voir d'un coup d'œil depuis la liste d'amis** | Chaque ami affiche **📦 objets · 💎 objets rares · 🐾 animaux · ⭐ niveau** et une ligne **⚖️ Vous : …** pour se situer sans ouvrir la fiche. Le bouton **🔄 Tout rafraîchir** met à jour **tous les aperçus en un seul appel** au relais. |
+| **« J'ai fait 3 Argile ancien et ça les met dans l'inventaire tous les 3 »** | Le nom est l'identité d'une création : deux créations homonymes ne font **qu'une seule entrée d'inventaire** (la seconde paire devient un raccourci), et une **migration** nettoie au chargement les parties déjà touchées (recettes repointées, découvertes fusionnées, compteur corrigé). Ce comportement est maintenant **vérifié dans le parcours réel** : trois fusions identiques ajoutent **un seul** objet, l'inventaire rendu l'annonce, et les fusions suivantes ne sont plus présentées comme une nouveauté. |
+
+Les aperçus restent **bornés et sans donnée privée** (≤ 5 Ko, plafond du cache du relais à 8 Ko) : la limite a été relevée
+juste ce qu'il fallait pour transporter les objets rares, tout en continuant à **revalider** chaque profil reçu
+(listes tronquées, raretés inconnues ramenées à « Commun », identifiant recalculé à partir du pseudonyme).
+
+La version est incrémentée en `1.4.0` (`package.json`, `GAME.version`) et le cache du service worker en `v7`,
+condition pour que les visiteurs déjà venus reçoivent réellement cette mise à jour. `src/social/profil.js` rejoint
+désormais la coquille pré-cachée, pour que la fiche d'ami fonctionne aussi **hors ligne**.
+
+### Version 1.3.0 — profils d'amis et inventaire sans doublon
+
+| Demande | Ce qui a été fait |
+|---|---|
+| **« Ajoute des options pour les amis : voir combien il a d'objets, ses statistiques, ses découvertes, ses animaux… »** | Chaque ami a un bouton **👁️ Voir le profil** : une fiche complète montre son **niveau et son XP**, ses **découvertes** (total, répartition par rareté, **12 dernières trouvailles** avec emoji et rareté), ses **animaux** (nom, emoji, niveau, équipe active), ses **mondes débloqués**, ses **collections**, ses **succès** et ses **statistiques** (fusions, quêtes, aides, jours de jeu, série, potions, amis). |
+| **Comment l'ami voit-il ces informations ?** | Par le **relais** (bouton **📡 Publier mon profil**, rafraîchissement automatique toutes les 15 s) ou par un **code de profil** à transmettre (bouton **📋 Copier mon profil (code)**, collé dans « Profils partagés »). Aucun compte, aucun échange de mot de passe. |
+| **Vie privée** | L'aperçu est **volontairement réduit et borné** (≤ 4 Ko) : il ne contient **jamais** la carte des découvertes, l'historique des fusions, les recettes, les paramètres ou la sauvegarde. Tout profil reçu est **revalidé** (liste blanche, valeurs bornées) avant d'être stocké, et un **identifiant annoncé n'est jamais cru** : il est recalculé à partir du pseudonyme, côté jeu comme côté relais. |
+| **« J'ai fait 3 Argile ancien et ça les met dans l'inventaire tous les 3 »** | Le **nom devient l'identité** d'une création : si un élément porte déjà ce nom (accents et casse ignorés), la nouvelle paire est enregistrée comme **raccourci** vers cet élément — l'inventaire ne gagne **aucune entrée en double** et le jeu l'annonce (« ♻️ … existe déjà »). Une **migration** nettoie les parties déjà touchées au chargement : recettes repointées, découvertes fusionnées, compteur corrigé. |
+
+La version est incrémentée en `1.3.0` (`package.json`, `GAME.version`) et le cache du service worker en `v6`
+(puis `v7` avec la fiche d'ami détaillée de la version 1.4.0).
+
+### Version 1.2.0 — système d'amis
+
+| Demande | Ce qui a été fait |
+|---|---|
+| **« Rajoute un système d'amis : on tape le pseudo et l'ami reçoit une notification qui dit “voulez-vous l'ajouter dans vos amis ?” »** | Nouvel écran **👥 Amis** : on tape le pseudonyme de l'autre joueur, la demande part, et le destinataire reçoit une **modale de notification** avec deux boutons (« ❌ Refuser » / « ✅ Oui, ajouter »). Aucun compte, aucun e-mail : chacun est identifié par un **identifiant dérivé de son pseudonyme**, affiché sur l'écran Amis. |
+| **« Un ami = +10 potions »** | Chaque ami accepté verse **exactement 10 potions aux deux joueurs** : immédiatement pour celui qui accepte, à réception de la confirmation pour l'autre. Une liste `cadeaux` garantit **une seule fois par personne** (retirer puis rajouter un ami ne redonne rien). Les potions sont celles des familiers : elles font monter un animal d'un niveau et rechargent son quota d'aides. |
+| **Livrer la notification malgré l'absence de serveur** | Deux transports au choix : **code d'invitation** à coller (fonctionne toujours, aucun réglage) ou **relais d'amis facultatif** (URL publique dans les Paramètres) avec un exemple prêt à déployer, `server/worker-amis.js` (Cloudflare Worker + KV) et un relais local `tools/serveur-relais.mjs` pour tester à deux navigateurs. |
+| **Sécurité** | Aucune clé d'API dans le navigateur, aucun mot de passe, aucun e-mail. Le relais ne reçoit que pseudonyme + identifiant dérivé + horodatage ; il livre chaque événement une seule fois et expire au bout de 7 jours. Les amis sont validés par **liste blanche** (`normaliserEtatAmis`) et exportés avec la partie. |
+
+Deux défauts trouvés pendant la vérification à deux joueurs ont été corrigés avant livraison :
+le relais remettait la **confirmation d'amitié au mauvais joueur** (elle repartait vers celui qui
+acceptait au lieu de celui qui avait demandé — la logique et les tests ont été verrouillés sur
+« `de` écrit, `vers` reçoit »), et l'acceptation ouvrait une **fenêtre de code inutile** par-dessus
+la notification quand le relais avait déjà livré la confirmation.
+
+La version est incrémentée en `1.2.0` (`package.json`, `GAME.version`) et le cache du service worker en `v5`,
+condition pour que les visiteurs déjà venus reçoivent réellement cette mise à jour.
+
 ---
 
 ## 13. Limites connues
@@ -533,6 +684,8 @@ condition pour que les visiteurs déjà venus reçoivent réellement cette mise 
 | **Stockage local** | Les données vivent dans le navigateur (IndexedDB, repli `localStorage`). Vider le cache ou les données du site **efface** les parties. Utilisez l'**export JSON** comme sauvegarde durable. Aucune récupération par e-mail n'existe : sans compte, il n'y a rien à récupérer côté serveur. |
 | **Quota d'aides** | En mode purement local, un utilisateur expérimenté peut modifier le compteur dans le stockage du navigateur. Une limitation inviolable exigerait un serveur (voir `server/`). |
 | **Recettes générées** | Les lots « candidats » ne sont pas des recettes officielles : ils ne comptent pas dans le compteur officiel et ne sont jamais présentés comme tels. |
+| **Amis sans relais** | Sans relais configuré, la notification n'arrive pas « toute seule » : il faut transmettre un code d'invitation. Le relais d'amis est fourni en exemple mais **n'est pas déployé par le projet** (aucune donnée de joueur n'est collectée par l'auteur du jeu). |
+| **Usurpation de pseudonyme** | Il n'y a ni compte ni mot de passe : n'importe qui peut se déclarer « Alex » et envoyer une demande. Le pseudo n'est pas une identité vérifiée — l'identifier n'a pas d'autre prétention que de distinguer deux joueurs. |
 | **IA** | Facultative. Sans point d'entrée configuré, seul le composeur local est utilisé. |
 | **Sauvegarde « en ligne »** | Non fournie : l'architecture est prévue, mais le jeu reste jouable entièrement hors ligne. |
 | **Dépôt en lecture seule côté joueur** | Un site GitHub Pages ne peut pas écrire dans le dépôt : les découvertes des joueurs restent locales, et toute mise à jour du registre officiel passe par une nouvelle version du projet. |

@@ -145,7 +145,9 @@ infinite-vrcraft/
   la même recette (décision explicite, réglable via `ORDRE_IMPORTANT_PAR_DEFAUT`). Une recette peut
   forcer `ordered: true` pour documenter une exception.
 - Recherche en O(1) grâce à un index `clé de paire → recette`.
-- Quatre statuts possibles : `nouveau`, `connu`, `experimental`, `inconnu`.
+- Cinq statuts possibles : `nouveau`, `connu`, `experimental`, `creation`, `inconnu`.
+  (`creation` = paire inconnue composée en mode Créativité, immédiatement enregistrée comme
+  élément officiel de la partie ; `experimental` ne subsiste que pour les anciennes parties.)
 - **Chargement progressif** : le registre est chargé au démarrage, et des lots supplémentaires
   peuvent être chargés à la demande (`RecipeStore.chargerLot()`), ce qui permet de garder un
   démarrage rapide même avec un catalogue très volumineux.
@@ -157,8 +159,17 @@ infinite-vrcraft/
 
 | Mode | Comportement |
 |---|---|
-| **Catalogue** | Seules les recettes officielles validées comptent comme découvertes officielles. |
-| **Créativité** | Les paires inconnues produisent une **création expérimentale** (locale, déterministe) ou une proposition du service IA facultatif. Ces résultats sont **clairement signalés** et ne sont jamais comptés comme recettes officielles. |
+| **Catalogue** | Seules les recettes officielles validées comptent comme découvertes. |
+| **Créativité** | Une paire sans recette produit une **création** (composeur local déterministe, ou service IA facultatif s'il est configuré). **Aucune fenêtre ne s'ouvre et aucune question n'est posée** : la création est enregistrée comme **élément officiel de la partie**, elle rejoint l'inventaire et l'encyclopédie comme **première découverte**, et devient **reproductible** (la même paire redonne toujours le même élément) et utilisable comme ingrédient. Elle est distinguée du catalogue livré par un badge 🧬 et le compteur « Créations enregistrées ». |
+
+Détails utiles :
+
+- Une création est **persistée dans la sauvegarde** (export/import compris) et rechargée à l'ouverture
+  de la partie : un élément inventé hier reste fusionnable aujourd'hui.
+- Les joueurs qui avaient des **créations expérimentales** d'une version précédente les voient
+  **officialisées automatiquement** au chargement (recomposition déterministe).
+- Le mode Catalogue reste strict : une paire inconnue n'y produit rien, et le jeu se contente d'un
+  message discret (aucune fenêtre bloquante) rappelant que la Créativité existe.
 
 ### 4.3 Familiers et aides
 
@@ -173,6 +184,16 @@ infinite-vrcraft/
   analyse de fusion.
 - Le quota est persisté dans la sauvegarde **et** dans un miroir local : recharger la page ne
   redonne pas 5 aides.
+
+#### Potions de familier
+
+- On gagne des potions en **montant de niveau** (1 par niveau) et en **réclamant une quête** (1 par quête).
+- Bouton **« 🧪 Donner une potion »** sur chaque familier possédé (écran Familiers) :
+  - le familier monte d'**exactement un niveau** ;
+  - le **quota d'aides est intégralement rechargé** : `0/5`, `1/5`, `2/5`, `3/5` ou `4/5` → **5/5** ;
+  - si le quota était **déjà plein** (`5/5`), la potion offre un **bonus : 10/5** ;
+  - dans tous les cas, la recharge de 10 minutes ramène ensuite le compteur à **5/5**.
+- Le bonus de potion survit à un rechargement de page (il est persisté avec le quota).
 
 ### 4.4 Sauvegardes
 
@@ -240,7 +261,8 @@ Si vous voulez brancher une IA :
 3. Dans le jeu : **Paramètres → Service IA facultatif**, collez l'URL du point d'entrée et cochez
    « Activer le service IA ».
 4. Le jeu valide chaque proposition (ingrédients conformes, résultat non vide, limites de taille)
-   et l'étiquette comme **expérimentale**.
+   et l'étiquette comme **création** : elle rejoint l'inventaire de la partie, exactement comme
+   une création locale (le service IA n'est qu'une source de noms en plus).
 
 Contrat attendu du proxy :
 
@@ -306,21 +328,25 @@ officielles : la promotion en officiel reste une décision humaine (relisez, pui
 - [x] **10 familiers** avec rareté, description, animation, compétences et progression
 - [x] Équipe limitée à **3 familiers**, choix sauvegardé par emplacement
 - [x] **Quota partagé de 5 aides / 10 minutes**, persistant après rechargement de page
+- [x] **Potions de familier** : gagnées par niveau et par quête, elles font monter un animal d'un
+      niveau **et** rechargent le quota (`3/5 → 5/5`, et `5/5 → 10/5`)
 - [x] Les **5 types d'aide** demandés, non décomptés en cas d'échec
+- [x] **Créations enregistrées comme éléments officiels** de la partie (inventaire, encyclopédie,
+      recettes reproductibles, persistance, migration des anciennes créations expérimentales)
+- [x] **Fusion fluide** : aucune fenêtre ne s'ouvre pour une paire inconnue (message discret)
 - [x] Propositions IA **validées** et distinctes des recettes officielles
 - [x] IA facultative **sans clé dans le navigateur** (proxy fourni en exemple)
 - [x] Thèmes (5, dont un thème à contraste élevé), taille du texte, réduction des animations
 - [x] Sons facultatifs générés localement + réglage du volume
 - [x] Navigation clavier, libellés ARIA, indicateurs non fondés sur la seule couleur
 - [x] Responsive ordinateur / tablette / téléphone (panneau latéral repliable)
-- [x] Mode hors ligne via service worker, avec mises à jour fiables (cache versionné)
-- [x] Écran de chargement avec actions de secours (jamais de blocage définitif)
+- [x] Mode hors ligne via service worker
 - [x] Internationalisation prête (français par défaut, anglais inclus)
 - [x] Statistiques complètes, partage de découverte (copie dans le presse-papiers)
 - [x] Classements **locaux** entre les 3 emplacements (aucun faux classement en ligne)
 - [x] Registre officiel **versionné** (42 Ko), compilation déterministe
 - [x] Outils : compilateur, validateur, générateur de lots, vérificateur d'imports, test de fumée
-- [x] **115 tests automatisés** (unitaires + intégration du vrai contrôleur)
+- [x] **132 tests automatisés** (unitaires + intégration du vrai contrôleur + fumée DOM)
 
 ## 9. Fonctionnalités restant à faire
 
@@ -396,10 +422,10 @@ npm test
 ```
 
 ```
-ℹ tests 115
-ℹ pass 115
+ℹ tests 132
+ℹ pass 132
 ℹ fail 0
-ℹ duration_ms ~1700
+ℹ duration_ms ~1800
 ```
 
 Couverture fonctionnelle réelle (extrait) :
@@ -409,10 +435,10 @@ Couverture fonctionnelle réelle (extrait) :
 | Moteur | symétrie des paires, statuts, déterminisme expérimental, doublons ignorés, ingrédient inconnu |
 | Données | 4 éléments de départ exacts, identifiants uniques, catégorie/rareté cohérentes, **260/260 éléments atteignables** |
 | Sauvegardes | format, version trop récente, types, limites, liste blanche des champs, export enveloppé |
-| Familiers | courbe d'XP, équipe de 3 max, **quota 5/10 min partagé**, persistance après rechargement, aide non consommée sans résultat |
+| Familiers | courbe d'XP, équipe de 3 max, **quota 5/10 min partagé**, persistance après rechargement, aide non consommée sans résultat, **recharge par potion (`0→5/5` et `5/5→10/5`, retour à 5/5 après 10 min)** |
 | Quêtes | déterminisme du tirage quotidien/hebdomadaire, progression par type, succès, mondes, collections |
 | IA | proposition conforme acceptée, ingrédients incohérents refusés, résultat vide refusé |
-| Intégration | vrai contrôleur : création de partie, fusion, chaîne Vapeur→Nuage, XP, aides, quota, export/import, 3 emplacements indépendants, **repli sans registre compilé** |
+| Intégration | vrai contrôleur : création de partie, fusion, chaîne Vapeur→Nuage, XP, aides, quota, export/import, 3 emplacements indépendants, **repli sans registre compilé**, **créations officielles (première découverte, reproductibilité, enchaînement, rechargement, export/import, migration des anciennes sauvegardes)**, **potions (niveau exact, quota, refus sans potion)** |
 | Interface (habillage) | règle globale `[hidden]`, masquage de l'écran de chargement, rendu de chaque écran au changement d'onglet, liste déroulante recevant un élément (pas un sélecteur), emoji présents dans la navigation, les titres, les filtres et les écrans |
 | Mise à jour du site | service worker à cache **versionné**, navigations servies « réseau d'abord », purge des anciens caches, coquille pré-cachée ne référençant que des fichiers existants, actions de secours de l'écran de chargement, rechargement unique (sans boucle) après une mise à jour |
 
@@ -479,6 +505,23 @@ Le scénario exact signalé par les joueurs a été reproduit puis validé (12 v
 | Onglets Inventaire / Encyclopédie vides, voire plantage | `_remplirSelect()` recevait l'élément **et** le passait à `querySelector`, ce qui lève `is not a valid selector` dans un vrai navigateur (invisible sous le DOM simulé) | la fonction reçoit désormais directement l'élément ; le DOM simulé refuse maintenant un sélecteur non textuel |
 | Aucun écran ne s'affichait après navigation | `vues.rendre(nom)` n'était jamais appelé : seul `majTopbar()` l'était | `onEcran()` appelle `vues.rendre(nom)` sur chaque changement d'écran |
 | Interface austère | — | emoji ajoutés dans la navigation, les titres, les boutons, les filtres, les listes déroulantes, les cartes, les toasts et les modales |
+
+### Version 1.1.0 — créations officielles et potions de familier
+
+| Demande | Ce qui a été fait |
+|---|---|
+| **Les trouvailles du mode Créativité doivent s'enregistrer comme des éléments officiels et aller dans l'inventaire** | Le moteur renvoie une création (`STATUT.EXPERIMENTAL` + `creation: true`) ; `Jeu.enregistrerCreation()` l'inscrit au catalogue de la partie, crée une **recette reproductible** pour la paire, l'ajoute à `decouvertes` (inventaire + encyclopédie, badge **🧬 Création**) et la persiste dans `save.creations`. Une création sert ensuite d'**ingrédient** aux fusions suivantes. |
+| **Fonctionnement plus fluide, sans question quand il ne connaît pas** | La fenêtre bloquante « 🚫 Pas de recette connue » a été **supprimée**. En mode Catalogue, une paire inconnue affiche un simple message discret ; en mode Créativité, elle produit directement la création (une annonce courte remplace la fenêtre de découverte). |
+| **Marquer la première découverte** | La création reçoit une entrée de découverte `source: 'creation'`, `premiere: true`, avec la même XP qu'une recette officielle (selon la rareté) ; elle alimente quêtes, succès, mondes et collections. |
+| **Des potions à donner à un animal pour le faire monter de niveau et réinitialiser son aide (`1/5`…`4/5` → `5/5`, et `5/5` → `10/5`)** | `QuotaAides.rechargerComplet()` : quota entamé → **5/5** ; quota déjà plein → **bonus 10/5**, remis à **5/5** par la recharge de 10 minutes. Les potions se gagnent **par niveau** et **par quête**, et le bouton **« 🧪 Donner une potion »** (écran Familiers) donne **exactement +1 niveau** au familier choisi. |
+
+Détails techniques : les créations et les potions ont leurs propres champs de sauvegarde (`creations`, `potions`),
+validés et bornés par la liste blanche (`LIMITES.maxCreations`, `LIMITES.maxPotions`), donc **exportées et importées**
+avec la partie. Les anciennes sauvegardes qui n'avaient que des créations « expérimentales » (non officielles) sont
+**migrées automatiquement** au chargement : elles réapparaissent dans l'inventaire et redeviennent fusionnables.
+
+La version est incrémentée en `1.1.0` (`package.json`, `GAME.version`) et le cache du service worker en `v4`,
+condition pour que les visiteurs déjà venus reçoivent réellement cette mise à jour.
 
 ---
 

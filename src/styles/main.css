@@ -315,6 +315,11 @@ html[data-theme="contraste"] .nav-btn[aria-current="true"] { color: #000; }
 .quota-pips { display: flex; gap: 6px; }
 .pip { width: 16px; height: 16px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); }
 .pip.on { background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-color: transparent; }
+/* Pips au-delà du maximum (bonus de potion « 10 / 5 ») : teinte distincte. */
+.pip.bonus.on { background: linear-gradient(90deg, var(--accent-2), var(--warn, #f2b544)); }
+.pip.bonus { border-style: dashed; }
+/* Badge des éléments créés en mode Créativité (désormais officiels pour la partie). */
+.badge-creation { background: rgba(126, 92, 255, 0.18); border: 1px solid rgba(126, 92, 255, 0.55); color: inherit; }
 
 /* ---------------- Sauvegardes ---------------- */
 .slot { display: grid; gap: 8px; }

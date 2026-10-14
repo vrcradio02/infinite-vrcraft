@@ -143,6 +143,17 @@ process.on('uncaughtException', (e) => erreurs.push(`Exception non capturée : $
 
 /* ---------------- Exécution ---------------- */
 
+/** Recherche récursive d'un nœud (le DOM simulé expose de vrais enfants). */
+function chercher(racine, predicat) {
+  if (!racine) return null;
+  if (predicat(racine)) return racine;
+  for (const enfant of racine.children || []) {
+    const trouve = chercher(enfant, predicat);
+    if (trouve) return trouve;
+  }
+  return null;
+}
+
 async function attendre(predicat, ms = 4000) {
   const debut = Date.now();
   while (Date.now() - debut < ms) {
@@ -194,6 +205,44 @@ try {
     /* --- Les emoji doivent être présents jusque dans le texte rendu --- */
     const texteAccueil = document.querySelector('#home-status-list').textContent;
     if (!EMOJI.test(texteAccueil)) erreurs.push("Aucun emoji dans l'état du jeu rendu (#home-status-list).");
+
+    /* --- Parcours Créativité : une paire inconnue devient un élément officiel, sans question --- */
+    const creation = await jeu.fusionner('graal', 'oeuf-vrc', { mode: 'creativite' });
+    if (!creation.ok || creation.creation !== true) {
+      erreurs.push(`Le mode Créativité n'a pas produit de création (ok=${creation.ok}, statut=${creation.statut}).`);
+    } else {
+      if (!jeu.save.decouvertes[creation.resultat.id]) erreurs.push("La création n'est pas entrée dans l'inventaire.");
+      if (!jeu.store.elements.has(creation.resultat.id)) erreurs.push("La création n'est pas utilisable comme ingrédient.");
+      const reprise = await jeu.fusionner('oeuf-vrc', 'graal');
+      if (!reprise.ok || reprise.resultat.id !== creation.resultat.id) {
+        erreurs.push('Une création doit être reproductible (même paire, même élément).');
+      }
+      allerA('inventaire');
+      await new Promise((r) => setTimeout(r, 30));
+      const texteInv = document.querySelector('#inv-grid').textContent;
+      if (!texteInv.includes(creation.resultat.nom)) erreurs.push("La création n'apparaît pas dans l'inventaire rendu.");
+      if (!texteInv.includes('🧬 Création')) erreurs.push("La création n'est pas signalée par un badge dans l'inventaire.");
+      console.log(`Créativité : « ${creation.resultat.nom} » enregistré et visible dans l'inventaire.`);
+    }
+
+    /* --- Potions : bouton réel dans l'écran Familiers, +1 niveau et quota rechargé --- */
+    jeu.save.potions = 2;
+    jeu.quota.restant = 2;
+    allerA('familiers');
+    await new Promise((r) => setTimeout(r, 30));
+    const texteQuota = document.querySelector('#quota-card').textContent;
+    if (!/Potions de familier/.test(texteQuota)) erreurs.push("Le compteur de potions n'est pas affiché sur l'écran Familiers.");
+    const boutonPotion = chercher(document.querySelector('#pets-body'), (n) => n.tagName === 'BUTTON' && n.textContent.includes('Donner une potion'));
+    if (!boutonPotion) {
+      erreurs.push("Le bouton « Donner une potion » est absent de l'écran Familiers.");
+    } else {
+      const niveauAvant = jeu.save.familiers.flammichou.niveau;
+      boutonPotion.click();
+      if (jeu.save.familiers.flammichou.niveau !== niveauAvant + 1) erreurs.push("La potion n'a pas fait monter le familier d'exactement un niveau.");
+      if (jeu.etatQuota().restant !== 5) erreurs.push(`La potion n'a pas rechargé le quota d'aides (restant=${jeu.etatQuota().restant}).`);
+      if (jeu.save.potions !== 1) erreurs.push('La potion donnée doit être décomptée.');
+      console.log(`Potion : Flammichou niveau ${niveauAvant} → ${jeu.save.familiers.chieval.niveau}, quota rechargé à 5/5.`);
+    }
   }
 } catch (e) {
   erreurs.push(`Échec du chargement de main.js : ${e.stack || e}`);

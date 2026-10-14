@@ -70,6 +70,28 @@ test('le DOM simulé du test de fumée refuse un sélecteur non textuel', () => 
   assert.match(smoke, /typeof sel !== 'string'/, 'le DOM simulé doit échouer comme un vrai navigateur');
 });
 
+/* ------------------- Fusion fluide et créations ------------------- */
+
+test('une fusion inconnue n’ouvre plus de fenêtre bloquante', () => {
+  assert.ok(!/Pas de recette connue/.test(mainJs), 'la fenêtre « Pas de recette connue » ne doit plus exister');
+  assert.match(mainJs, /Aucune recette connue pour cette paire/, 'un message discret doit remplacer la fenêtre');
+});
+
+test('les créations sont signalées dans l’inventaire et l’encyclopédie', () => {
+  const views = coreLire('src/ui/views.js');
+  const occurrences = [...views.matchAll(/🧬 Création/g)].length;
+  assert.ok(occurrences >= 2, 'l’inventaire et l’encyclopédie doivent marquer les créations');
+  assert.match(views, /badge-creation/, 'une classe dédiée doit exister pour ces badges');
+  assert.match(coreLire('src/styles/main.css'), /\.badge-creation/);
+});
+
+test('l’écran Familiers propose de donner une potion et affiche le compteur', () => {
+  const views = coreLire('src/ui/views.js');
+  assert.match(views, /🧪 Donner une potion/, 'bouton manquant dans l’écran Familiers');
+  assert.match(views, /Potions de familier/, 'le compteur de potions doit être affiché');
+  assert.match(views, /_donnerPotion\(/, 'le bouton doit appeler _donnerPotion');
+});
+
 /* ------------------------------- Emoji ------------------------------- */
 
 test('chaque bouton de navigation porte un emoji hors de sa zone traduite', () => {
@@ -119,6 +141,8 @@ test('les libellés générés en JavaScript portent aussi des emoji', () => {
     '📊 Statistiques',
     '💾 Sauvegarde ${s.slot + 1}',
     '🎨 Thème',
+    '🧪 Donner une potion',
+    '🧬 Création',
   ]) {
     assert.ok(views.includes(extrait), `libellé attendu absent de views.js : ${extrait}`);
   }

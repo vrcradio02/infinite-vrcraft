@@ -102,6 +102,42 @@ test('la recharge intervient après 10 minutes', () => {
   assert.equal(QUOTA.fenetreMs, 10 * 60 * 1000);
 });
 
+test('une potion recharge complètement un quota entamé (3/5 devient 5/5)', () => {
+  const q = new QuotaAides(0, () => 0);
+  q.consommer();
+  q.consommer();
+  assert.equal(q.disponibles(), 3);
+  const r = q.rechargerComplet();
+  assert.equal(r.restant, QUOTA.max);
+  assert.equal(r.bonus, false);
+  assert.equal(q.disponibles(), QUOTA.max);
+});
+
+test('une potion sur un quota plein donne 10/5, puis retour à 5/5 après 10 minutes', () => {
+  let t = 0;
+  const q = new QuotaAides(0, () => t);
+  const r = q.rechargerComplet();
+  assert.equal(r.restant, QUOTA.max + QUOTA.bonusMax, 'quota plein : la potion donne un bonus');
+  assert.equal(r.bonus, true);
+  assert.equal(q.disponibles(), 10);
+  assert.equal(q.tempsRestant(), 0);
+  // La fenêtre de 10 minutes écoulée ramène à 5/5 (et non à 10/5).
+  t = QUOTA.fenetreMs + 1;
+  assert.equal(q.disponibles(), QUOTA.max);
+});
+
+test('le bonus de potion survit à un rechargement de page', () => {
+  memoire.clear();
+  const q = new QuotaAides(2, () => 0);
+  q.rechargerComplet();
+  q.rechargerComplet();
+  assert.equal(q.disponibles(), QUOTA.max + QUOTA.bonusMax);
+  q.persister();
+  const q2 = new QuotaAides(2, () => 0);
+  q2.restaurer(null);
+  assert.equal(q2.disponibles(), QUOTA.max + QUOTA.bonusMax, 'un rechargement ne doit pas écraser le bonus');
+});
+
 test('le temps restant est borné et nul quand le quota est plein', () => {
   let t = 0;
   const q = new QuotaAides(0, () => t);

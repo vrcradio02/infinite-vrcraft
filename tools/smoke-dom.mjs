@@ -241,7 +241,7 @@ try {
       if (jeu.save.familiers.flammichou.niveau !== niveauAvant + 1) erreurs.push("La potion n'a pas fait monter le familier d'exactement un niveau.");
       if (jeu.etatQuota().restant !== 5) erreurs.push(`La potion n'a pas rechargé le quota d'aides (restant=${jeu.etatQuota().restant}).`);
       if (jeu.save.potions !== 1) erreurs.push('La potion donnée doit être décomptée.');
-      console.log(`Potion : Flammichou niveau ${niveauAvant} → ${jeu.save.familiers.chieval.niveau}, quota rechargé à 5/5.`);
+      console.log(`Potion : Flammichou niveau ${niveauAvant} → ${jeu.save.familiers.flammichou.niveau}, quota rechargé à 5/5.`);
     }
   }
 } catch (e) {

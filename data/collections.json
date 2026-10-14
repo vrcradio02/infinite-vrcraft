@@ -1,0 +1,13 @@
+{
+  "meta": { "version": 1, "description": "Collections thématiques : compléter une collection donne une récompense." },
+  "collections": [
+    { "id": "meteo", "nom": "Météorologue", "emoji": "⛈️", "elements": ["vapeur", "nuage", "pluie", "neige", "orage", "foudre", "tempete", "arc-en-ciel"], "recompense": { "xp": 200 } },
+    { "id": "geographie", "nom": "Cartographe", "emoji": "🗺️", "elements": ["pierre", "montagne", "volcan", "desert", "ocean", "ile", "canyon", "glacier", "grotte"], "recompense": { "xp": 220 } },
+    { "id": "faune", "nom": "Naturaliste", "emoji": "🦁", "elements": ["animal", "poisson", "oiseau", "mammifere", "insecte", "loup", "baleine", "dinosaure"], "recompense": { "xp": 240 } },
+    { "id": "informatique", "nom": "Informaticien", "emoji": "💻", "elements": ["electricite", "ordinateur", "logiciel", "code", "reseau", "internet", "robot", "intelligence-artificielle"], "recompense": { "xp": 280 } },
+    { "id": "cosmos", "nom": "Astronome", "emoji": "🌌", "elements": ["etoile", "soleil", "lune", "planete", "galaxie", "nebuleuse", "trou-noir", "univers"], "recompense": { "xp": 300 } },
+    { "id": "bestiaire", "nom": "Bestiaire", "emoji": "🐉", "elements": ["dragon", "licorne", "phenix", "griffon", "golem", "fantome", "loup-garou", "demon", "ange"], "recompense": { "xp": 320 } },
+    { "id": "gastronomie", "nom": "Gourmet", "emoji": "🍽️", "elements": ["pain", "fromage", "pizza", "sushi", "burger", "gateau", "chocolat", "creme-glacee"], "recompense": { "xp": 260 } },
+    { "id": "civilisation", "nom": "Historien", "emoji": "🏛️", "elements": ["village", "ville", "metropole", "ecriture", "livre", "monnaie", "loi", "democratie"], "recompense": { "xp": 260 } }
+  ]
+}

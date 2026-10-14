@@ -1,0 +1,17 @@
+{
+  "lot": "tendances",
+  "monde": "tendances",
+  "version": 1,
+  "description": "Monde Tendances : culture Internet, jeux vidéo, réseaux et phénomènes viraux. Catalogue local actualisable (aucune connexion requise).",
+  "recipes": [
+    ["art", "internet", "meme"],
+    ["ordinateur", "art", "jeux-video"],
+    ["humain", "smartphone", "influenceur"],
+    ["internet", "musique", "streaming"],
+    ["internet", "ville", "reseau-social"],
+    ["monnaie", "code", "crypto"],
+    ["hologramme", "jeux-video", "realite-virtuelle"],
+    ["influenceur", "lumiere", "selfie"],
+    ["internet", "meme", "viral"]
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "description": "Liste des lots de recettes chargés par le jeu. Ajoutez ici le nom d'un nouveau fichier data/fusions/lot-<nom>.json pour qu'il soit pris en compte.",
+  "lots": [
+    "base",
+    "nature",
+    "culture",
+    "technologie",
+    "cuisine",
+    "espace",
+    "fantastique",
+    "tendances"
+  ]
+}

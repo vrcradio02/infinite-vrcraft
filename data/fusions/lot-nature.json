@@ -1,0 +1,26 @@
+{
+  "lot": "nature",
+  "monde": "nature",
+  "version": 1,
+  "description": "Monde Nature : animaux, végétaux, milieux et écosystèmes.",
+  "recipes": [
+    ["ocean", "vie", "poisson"],
+    ["poisson", "poisson", "requin"],
+    ["mammifere", "ocean", "baleine"],
+    ["animal", "foret", "loup"],
+    ["animal", "maison", "chat"],
+    ["animal", "village", "chien"],
+    ["animal", "prairie", "cheval"],
+    ["animal", "plante", "insecte"],
+    ["animal", "marais", "grenouille"],
+    ["animal", "desert", "serpent"],
+    ["animal", "lac", "tortue"],
+    ["animal", "temps", "dinosaure"],
+    ["animal", "terre", "mammifere"],
+    ["animal", "vent", "oiseau"],
+    ["insecte", "fleur", "papillon"],
+    ["insecte", "sucre", "abeille"],
+    ["abeille", "fleur", "miel"],
+    ["insecte", "insecte", "araignee"]
+  ]
+}

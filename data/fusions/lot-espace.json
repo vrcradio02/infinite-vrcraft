@@ -1,0 +1,31 @@
+{
+  "lot": "espace",
+  "monde": "espace",
+  "version": 1,
+  "description": "Monde Spatial : étoiles, planètes, galaxies, trous noirs et technologies spatiales.",
+  "recipes": [
+    ["feu", "obscurite", "etoile"],
+    ["etoile", "chaleur", "soleil"],
+    ["etoile", "froid", "lune"],
+    ["etoile", "terre", "planete"],
+    ["soleil", "planete", "systeme-solaire"],
+    ["etoile", "etoile", "galaxie"],
+    ["galaxie", "nuage", "nebuleuse"],
+    ["etoile", "vide", "trou-noir"],
+    ["planete", "pierre", "gravite"],
+    ["glace", "etoile", "comete"],
+    ["pierre", "gravite", "asteroide"],
+    ["asteroide", "chaleur", "meteore"],
+    ["etoile", "chaos", "supernova"],
+    ["galaxie", "galaxie", "univers"],
+    ["univers", "energie", "big-bang"],
+    ["vie", "planete", "extraterrestre"],
+    ["extraterrestre", "machine", "ovni"],
+    ["ordinateur", "etoile", "satellite"],
+    ["moteur", "etoile", "fusee"],
+    ["satellite", "humain", "station-spatiale"],
+    ["fusee", "humain", "voyage-spatial"],
+    ["trou-noir", "obscurite", "matiere-noire"],
+    ["trou-noir", "voyage-spatial", "trou-de-ver"]
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "meta": { "version": 1, "description": "Mondes de progression. Conditions évaluées dans src/game/mondes.js." },
+  "mondes": [
+    {
+      "id": "libre",
+      "nom": "Genèse",
+      "emoji": "🌍",
+      "couleur": "#6c8cff",
+      "description": "Le berceau des quatre éléments. Ici naissent la matière, l'énergie et les concepts.",
+      "themes": ["Matière", "Énergie", "Météo", "Concept"],
+      "objectifs": "Découvrir 10 éléments.",
+      "deblocage": { "type": "depart" }
+    },
+    {
+      "id": "nature",
+      "nom": "Nature",
+      "emoji": "🌲",
+      "couleur": "#42d392",
+      "description": "Plantes, animaux, forêts, océans et écosystèmes.",
+      "themes": ["Vie", "Nature", "Météo"],
+      "objectifs": "Découvrir 25 éléments.",
+      "deblocage": { "type": "decouvertes", "valeur": 25 }
+    },
+    {
+      "id": "culture",
+      "nom": "Culture",
+      "emoji": "🏛️",
+      "couleur": "#ffc857",
+      "description": "Sociétés, arts, sciences, histoire et organisation humaine.",
+      "themes": ["Culture", "Vie"],
+      "objectifs": "Atteindre le niveau 3.",
+      "deblocage": { "type": "niveau", "valeur": 3 }
+    },
+    {
+      "id": "technologie",
+      "nom": "Technologie",
+      "emoji": "⚙️",
+      "couleur": "#5aa9ff",
+      "description": "Machines, informatique, réseaux et inventions futuristes.",
+      "themes": ["Technologie", "Matière"],
+      "objectifs": "Découvrir 55 éléments.",
+      "deblocage": { "type": "decouvertes", "valeur": 55 }
+    },
+    {
+      "id": "cuisine",
+      "nom": "Cuisine",
+      "emoji": "🍳",
+      "couleur": "#ff7a59",
+      "description": "Aliments, ingrédients et combinaisons savoureuses (ou surprenantes).",
+      "themes": ["Cuisine"],
+      "objectifs": "Atteindre le niveau 5.",
+      "deblocage": { "type": "niveau", "valeur": 5 }
+    },
+    {
+      "id": "espace",
+      "nom": "Spatial",
+      "emoji": "🚀",
+      "couleur": "#38e8ff",
+      "description": "Étoiles, planètes, galaxies, trous noirs et vie extraterrestre.",
+      "themes": ["Espace"],
+      "objectifs": "Terminer 3 quêtes.",
+      "deblocage": { "type": "quetes", "valeur": 3 }
+    },
+    {
+      "id": "fantastique",
+      "nom": "Fantastique",
+      "emoji": "🐉",
+      "couleur": "#b06cff",
+      "description": "Magie, créatures mythiques, artefacts et royaumes.",
+      "themes": ["Fantastique"],
+      "objectifs": "Découvrir 90 éléments.",
+      "deblocage": { "type": "decouvertes", "valeur": 90 }
+    },
+    {
+      "id": "tendances",
+      "nom": "Tendances",
+      "emoji": "📱",
+      "couleur": "#ff5ea8",
+      "description": "Culture Internet, jeux vidéo, réseaux et phénomènes viraux.",
+      "themes": ["Tendance"],
+      "objectifs": "Atteindre le niveau 8.",
+      "deblocage": { "type": "niveau", "valeur": 8 }
+    }
+  ]
+}

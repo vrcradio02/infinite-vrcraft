@@ -57,7 +57,7 @@ export class PlateauUI {
     $('#btn-zoom-in').addEventListener('click', () => this.changerZoom(0.1));
     $('#btn-zoom-out').addEventListener('click', () => this.changerZoom(-0.1));
     $('#btn-center').addEventListener('click', () => this.recentrer());
-    $('#btn-clean').addEventListener('click', () => { this.jeu.viderPlateau(); this.rendre(); this.onMessage('Plateau nettoyé.', 'info'); });
+    $('#btn-clean').addEventListener('click', () => { this.jeu.viderPlateau(); this.rendre(); this.onMessage('🧹 Plateau nettoyé.', 'info'); });
     $('#btn-undo').addEventListener('click', () => { if (this.jeu.annuler()) this.rendre(); });
     $('#btn-redo').addEventListener('click', () => { if (this.jeu.retablir()) this.rendre(); });
     $('#btn-fuse-selected').addEventListener('click', () => this.fusionnerSelection());
@@ -107,7 +107,7 @@ export class PlateauUI {
 
   ajouterElement(id, position) {
     if (!this.jeu.save?.decouvertes?.[id]) {
-      this.onMessage('Cet élément n\'a pas encore été découvert.', 'warn');
+      this.onMessage('🔒 Cet élément n\'a pas encore été découvert.', 'warn');
       return null;
     }
     const node = this.jeu.ajouterAuPlateau(id, position);
@@ -242,7 +242,7 @@ export class PlateauUI {
 
   fusionnerSelection() {
     if (this.selection.length !== 2) {
-      this.onMessage('Sélectionnez exactement deux éléments.', 'warn');
+      this.onMessage('⚠️ Sélectionnez exactement deux éléments.', 'warn');
       return;
     }
     const [a, b] = this.selection;
@@ -263,7 +263,7 @@ export class PlateauUI {
       const chip = el('button', {
         class: 'chip',
         'aria-pressed': String(this.selection.includes(id)),
-        title: `Ajouter ${nom} au plateau`,
+        title: `➕ Ajouter ${nom} au plateau`,
         onClick: () => this.ajouterElement(id),
         onContextmenu: (e) => { e.preventDefault(); this.basculerSelection(id); },
       }, [
@@ -273,6 +273,6 @@ export class PlateauUI {
       if (this.selection.includes(id)) chip.style.borderColor = 'var(--accent)';
       liste.append(chip);
     }
-    if (!n) liste.append(el('p', { class: 'muted', text: 'Aucun élément.' }));
+    if (!n) liste.append(el('p', { class: 'muted', text: '🔍 Aucun élément.' }));
   }
 }
